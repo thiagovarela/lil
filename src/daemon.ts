@@ -1,0 +1,416 @@
+/**
+ * lil daemon — always-on process that connects channels to the agent.
+ *
+ * Receives messages from channels (Telegram, etc.), routes them to
+ * a pi agent session, collects the response, and sends it back.
+ *
+ * Each chat gets its own persistent session (keyed by channel+chatId).
+ */
+
+import {
+  AuthStorage,
+  createAgentSession,
+  DefaultResourceLoader,
+  ModelRegistry,
+  SessionManager,
+  type AgentSession,
+  type CreateAgentSessionResult,
+} from "@mariozechner/pi-coding-agent";
+import type { ImageContent } from "@mariozechner/pi-ai";
+import type { Attachment, Channel, InboundMessage } from "./channels/channel.ts";
+import { TelegramChannel } from "./channels/telegram.ts";
+import { loadConfig, getAgentDir, getWorkspace, getAuthPath, getLilDir, type LilConfig } from "./config.ts";
+import securityExtension from "./extensions/security.ts";
+import personaExtension from "./extensions/persona/index.ts";
+import cronExtension from "./extensions/cron/index.ts";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { HeartbeatService } from "./heartbeat.ts";
+
+// ─── PID file management ──────────────────────────────────────────────────────
+
+const PID_FILE = join(getLilDir(), "daemon.pid");
+
+export function isRunning(): { running: boolean; pid?: number } {
+  if (!existsSync(PID_FILE)) return { running: false };
+
+  try {
+    const pid = parseInt(readFileSync(PID_FILE, "utf-8").trim(), 10);
+    // Check if process is alive
+    process.kill(pid, 0);
+    return { running: true, pid };
+  } catch {
+    // Process not found — stale PID file
+    cleanupPidFile();
+    return { running: false };
+  }
+}
+
+function writePidFile(): void {
+  writeFileSync(PID_FILE, String(process.pid), "utf-8");
+}
+
+function cleanupPidFile(): void {
+  try {
+    unlinkSync(PID_FILE);
+  } catch {
+    // ignore
+  }
+}
+
+// ─── Session cache (one session per chat) ──────────────────────────────────────
+
+const sessionCache = new Map<string, AgentSession>();
+
+async function getOrCreateSession(
+  chatKey: string,
+  config: LilConfig
+): Promise<AgentSession> {
+  const cached = sessionCache.get(chatKey);
+  if (cached) return cached;
+
+  const agentDir = getAgentDir(config);
+  const cwd = getWorkspace(config);
+
+  const authStorage = AuthStorage.create(getAuthPath());
+  const modelRegistry = new ModelRegistry(authStorage);
+
+  const loader = new DefaultResourceLoader({
+    cwd,
+    agentDir,
+    extensionFactories: [securityExtension, personaExtension, cronExtension],
+  });
+  await loader.reload();
+
+  // Use a stable session directory per chat so conversations persist across restarts
+  const sessionDir = join(getLilDir(), "sessions", chatKey);
+
+  const sessionManager = SessionManager.continueRecent(cwd, sessionDir);
+
+  // Resolve model from lil config (agent.model.primary = "provider/model")
+  const modelSpec = config.agent?.model?.primary;
+  let model;
+  if (modelSpec) {
+    const slash = modelSpec.indexOf("/");
+    if (slash !== -1) {
+      const provider = modelSpec.substring(0, slash);
+      const modelId = modelSpec.substring(slash + 1);
+      model = modelRegistry.find(provider, modelId);
+      if (!model) {
+        console.warn(`[daemon] Warning: model "${modelSpec}" not found, falling back to auto-detection`);
+      }
+    }
+  }
+
+  const result: CreateAgentSessionResult = await createAgentSession({
+    cwd,
+    agentDir,
+    authStorage,
+    modelRegistry,
+    resourceLoader: loader,
+    sessionManager,
+    model,
+  });
+
+  const { session } = result;
+
+  // Bind extensions (headless — no UI)
+  await session.bindExtensions({
+    commandContextActions: {
+      waitForIdle: () => session.agent.waitForIdle(),
+      newSession: async (opts) => {
+        const success = await session.newSession({ parentSession: opts?.parentSession });
+        if (success && opts?.setup) {
+          await opts.setup(session.sessionManager);
+        }
+        return { cancelled: !success };
+      },
+      fork: async (entryId) => {
+        const r = await session.fork(entryId);
+        return { cancelled: r.cancelled };
+      },
+      navigateTree: async (targetId, opts) => {
+        const r = await session.navigateTree(targetId, {
+          summarize: opts?.summarize,
+          customInstructions: opts?.customInstructions,
+          replaceInstructions: opts?.replaceInstructions,
+          label: opts?.label,
+        });
+        return { cancelled: r.cancelled };
+      },
+      switchSession: async (sessionPath) => {
+        const success = await session.switchSession(sessionPath);
+        return { cancelled: !success };
+      },
+      reload: async () => {
+        await session.reload();
+      },
+    },
+    onError: (err) => {
+      console.error(`[daemon] Extension error (${err.extensionPath}): ${err.error}`);
+    },
+  });
+
+  // Subscribe to enable session persistence
+  session.subscribe(() => {});
+
+  sessionCache.set(chatKey, session);
+  return session;
+}
+
+// ─── Attachment helpers ────────────────────────────────────────────────────────
+
+const IMAGE_MIME_PREFIXES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/** Convert image attachments to pi's ImageContent format for vision models. */
+function toImageContents(attachments?: Attachment[]): ImageContent[] {
+  if (!attachments) return [];
+  return attachments
+    .filter((a) => IMAGE_MIME_PREFIXES.some((prefix) => a.mimeType.startsWith(prefix)))
+    .map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
+}
+
+/** Save non-image attachments to disk and return their paths. */
+async function saveNonImageAttachments(
+  attachments: Attachment[] | undefined,
+  chatKey: string,
+): Promise<{ fileName: string; path: string }[]> {
+  if (!attachments) return [];
+
+  const nonImages = attachments.filter(
+    (a) => !IMAGE_MIME_PREFIXES.some((prefix) => a.mimeType.startsWith(prefix)),
+  );
+  if (nonImages.length === 0) return [];
+
+  const { mkdirSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+
+  const dir = join(getLilDir(), "attachments", chatKey);
+  mkdirSync(dir, { recursive: true });
+
+  const results: { fileName: string; path: string }[] = [];
+  for (const att of nonImages) {
+    const name = att.fileName || `file_${Date.now()}`;
+    const filePath = join(dir, name);
+    writeFileSync(filePath, Buffer.from(att.data, "base64"));
+    results.push({ fileName: name, path: filePath });
+    console.log(`[daemon] Saved attachment: ${filePath} (${att.mimeType})`);
+  }
+  return results;
+}
+
+// ─── Message handling ──────────────────────────────────────────────────────────
+
+/** Lock to serialize message processing per chat */
+const chatLocks = new Map<string, Promise<void>>();
+
+async function handleMessage(message: InboundMessage, channel: Channel): Promise<void> {
+  const chatKey = `${message.channel}_${message.chatId}`;
+
+  // Serialize messages per chat — wait for previous message to finish
+  const previous = chatLocks.get(chatKey) ?? Promise.resolve();
+  const current = previous.then(() => processMessage(message, channel, chatKey));
+  chatLocks.set(chatKey, current.catch(() => {})); // swallow errors in the chain
+  await current;
+}
+
+async function processMessage(
+  message: InboundMessage,
+  channel: Channel,
+  chatKey: string
+): Promise<void> {
+  const config = loadConfig();
+
+  const attachCount = message.attachments?.length ?? 0;
+  const preview = message.text.slice(0, 100) || (attachCount > 0 ? `[${attachCount} attachment(s)]` : "[empty]");
+  console.log(`[daemon] ${message.channel}/${message.chatId} (${message.senderName}): ${preview}`);
+
+  try {
+    const session = await getOrCreateSession(chatKey, config);
+
+    // Build image attachments for the agent (vision-capable models)
+    const images = toImageContents(message.attachments);
+
+    // For non-image attachments, save to temp files and note paths in the prompt
+    const filePaths = await saveNonImageAttachments(message.attachments, chatKey);
+
+    let promptText = message.text;
+    if (filePaths.length > 0) {
+      const fileList = filePaths.map((f) => `  - ${f.fileName}: ${f.path}`).join("\n");
+      const prefix = promptText ? `${promptText}\n\n` : "";
+      promptText = `${prefix}[Attached files saved to disk]\n${fileList}`;
+    }
+
+    if (!promptText && images.length === 0) {
+      // Nothing to send — likely an unsupported attachment type that failed download
+      await channel.send(message.chatId, "⚠️ Received an empty message with no processable content.");
+      return;
+    }
+
+    // Send message to agent and wait for completion
+    await session.prompt(promptText || "Describe this image.", {
+      source: "rpc",
+      images: images.length > 0 ? images : undefined,
+    });
+
+    // Extract the assistant's response
+    const state = session.state;
+    const lastMessage = state.messages[state.messages.length - 1];
+
+    if (lastMessage?.role === "assistant") {
+      const textParts: string[] = [];
+      for (const content of lastMessage.content) {
+        if (content.type === "text" && content.text.trim()) {
+          textParts.push(content.text);
+        }
+      }
+
+      const responseText = textParts.join("\n").trim();
+      if (responseText) {
+        await channel.send(message.chatId, responseText);
+      } else {
+        await channel.send(message.chatId, "(No text response)");
+      }
+    }
+  } catch (err) {
+    console.error(`[daemon] Error processing message:`, err);
+    try {
+      await channel.send(
+        message.chatId,
+        `⚠️ Error: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } catch {
+      // Failed to send error — ignore
+    }
+  }
+}
+
+// ─── Daemon lifecycle ──────────────────────────────────────────────────────────
+
+export async function startDaemon(): Promise<void> {
+  const config = loadConfig();
+  const channels: Channel[] = [];
+
+  // Telegram
+  const tg = config.channels?.telegram;
+  if (tg?.botToken && tg.enabled !== false) {
+    channels.push(
+      new TelegramChannel({
+        token: tg.botToken,
+        allowedUsers: tg.allowFrom ?? [],
+      })
+    );
+  }
+
+  if (channels.length === 0) {
+    console.error(
+      "No channels configured. Set up at least one channel:\n\n" +
+      "  lil config set channels.telegram.botToken <your-bot-token>\n" +
+      "  lil config set channels.telegram.allowFrom [your-telegram-user-id]\n" +
+      "\nOr edit ~/.lil/lil.json directly.\n"
+    );
+    process.exit(1);
+  }
+
+  // Write PID file
+  writePidFile();
+
+  // ─── Heartbeat service ──────────────────────────────────────────────
+
+  const heartbeat = new HeartbeatService(config);
+
+  // Track last active channel for heartbeat responses
+  let lastChannel: Channel | null = null;
+  let lastChatId: string | null = null;
+
+  heartbeat.setHandler(async (prompt: string) => {
+    // Use last active channel to deliver heartbeat results
+    if (!lastChannel || !lastChatId) {
+      console.log("[heartbeat] No active channel — skipping delivery");
+      return;
+    }
+
+    const chatKey = `heartbeat_${lastChatId}`;
+    const session = await getOrCreateSession(chatKey, config);
+
+    try {
+      await session.prompt(prompt, { source: "rpc" });
+
+      const state = session.state;
+      const lastMessage = state.messages[state.messages.length - 1];
+
+      if (lastMessage?.role === "assistant") {
+        const textParts: string[] = [];
+        for (const content of lastMessage.content) {
+          if (content.type === "text" && content.text.trim()) {
+            textParts.push(content.text);
+          }
+        }
+
+        const responseText = textParts.join("\n").trim();
+        // Don't send "all clear" messages — only actionable results
+        if (responseText && !responseText.match(/^all\s+clear\.?$/i)) {
+          await lastChannel.send(lastChatId, `🔔 ${responseText}`);
+        }
+      }
+    } catch (err) {
+      console.error(
+        `[heartbeat] Error processing:`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  });
+
+  // ─── Graceful shutdown ────────────────────────────────────────────────
+
+  const shutdown = async (signal: string) => {
+    console.log(`\n[daemon] Received ${signal}, shutting down...`);
+    heartbeat.stop();
+    for (const ch of channels) {
+      await ch.stop().catch(() => {});
+    }
+    cleanupPidFile();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+  // ─── Start channels ──────────────────────────────────────────────────
+
+  console.log(`[daemon] Starting lil daemon (pid ${process.pid})...`);
+  console.log(`[daemon] Workspace: ${getWorkspace(config)}`);
+  console.log(`[daemon] Channels: ${channels.map((c) => c.name).join(", ")}`);
+
+  for (const ch of channels) {
+    await ch.start((msg) => {
+      // Track last active channel for heartbeat delivery
+      lastChannel = ch;
+      lastChatId = msg.chatId;
+      return handleMessage(msg, ch);
+    });
+  }
+
+  // Start heartbeat after channels are ready
+  heartbeat.start();
+
+  console.log("[daemon] Ready. Waiting for messages...");
+}
+
+export function stopDaemon(): boolean {
+  const status = isRunning();
+  if (!status.running || !status.pid) {
+    console.log("Daemon is not running.");
+    return false;
+  }
+
+  try {
+    process.kill(status.pid, "SIGTERM");
+    console.log(`Stopped daemon (pid ${status.pid}).`);
+    cleanupPidFile();
+    return true;
+  } catch (err) {
+    console.error(`Failed to stop daemon: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+}
