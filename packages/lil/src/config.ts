@@ -8,7 +8,6 @@
  * at ~/.pi/agent/auth.json — shared between `pi` and `lil`.
  */
 
-import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -36,37 +35,22 @@ export interface LilConfig {
 
 	/** Channel configuration — each channel starts when its section exists */
 	channels?: {
-		telegram?: {
+		slack?: {
 			enabled?: boolean;
 			/** Persona name override for this channel */
 			persona?: string;
-			/** Bot token from @BotFather */
+			/** App token from Slack app settings (xapp-...) */
+			appToken?: string;
+			/** Bot token from Slack app settings (xoxb-...) */
 			botToken?: string;
-			/** Allowed Telegram user IDs */
-			allowFrom?: number[];
+			/** Allowed Slack user IDs */
+			allowFrom?: string[];
 		};
-		// Future channels:
-		// whatsapp?: { ... };
-		// signal?: { ... };
 	};
 
 	/** Cron / scheduled jobs */
 	cron?: {
 		enabled?: boolean;
-	};
-
-	/** Web UI server */
-	web?: {
-		/** Enable web server (default: true) */
-		enabled?: boolean;
-		/** Persona name override for this channel */
-		persona?: string;
-		/** Bind host (default: 127.0.0.1) */
-		host?: string;
-		/** Bind port (default: 3333) */
-		port?: number;
-		/** Bearer/cookie token for API + WebSocket auth */
-		token?: string;
 	};
 
 	/** Heartbeat — periodic task execution */
@@ -116,18 +100,6 @@ export function getAuthPath(): string {
 /** Path to the config file */
 export function getConfigPath(): string {
 	return CONFIG_PATH;
-}
-
-/** Returns a valid web auth token, generating and persisting one if needed. */
-export function ensureWebToken(config?: LilConfig): string {
-	const current = config ?? loadConfig();
-	const token = current.web?.token;
-	if (token && token.length >= 16) return token;
-
-	const nextToken = randomUUID();
-	const updated = setByPath(current, "web.token", nextToken);
-	saveConfig(updated);
-	return nextToken;
 }
 
 // ─── Loading & saving ─────────────────────────────────────────────────────────
@@ -264,14 +236,6 @@ function migrateFromLegacy(): void {
 			if (legacy.model) {
 				config.agent.model = { primary: legacy.model as string };
 			}
-		}
-
-		if (legacy.telegramToken || legacy.allowedUsers) {
-			config.channels = {
-				telegram: {},
-			};
-			if (legacy.telegramToken) config.channels.telegram!.botToken = legacy.telegramToken as string;
-			if (legacy.allowedUsers) config.channels.telegram!.allowFrom = legacy.allowedUsers as number[];
 		}
 
 		saveConfig(config);

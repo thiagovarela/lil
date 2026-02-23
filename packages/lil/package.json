@@ -13,9 +13,9 @@
 		"@mariozechner/pi-ai": "^0.54.0",
 		"@mariozechner/pi-coding-agent": "^0.54.0",
 		"@sinclair/typebox": "^0.34.48",
-		"grammy": "^1.36.1",
-		"json5": "^2.2.3",
-		"lil-web": "workspace:*"
+		"@slack/socket-mode": "^2.0.0",
+		"@slack/web-api": "^7.0.0",
+		"json5": "^2.2.3"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"

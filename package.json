@@ -2,13 +2,10 @@
 	"name": "lil-workspace",
 	"private": true,
 	"workspaces": [
-		"packages/lil",
-		"packages/web"
+		"packages/lil"
 	],
 	"scripts": {
 		"dev": "bun run --filter lil dev",
-		"web:dev": "bun run --filter lil-web dev",
-		"web:build": "bun run --filter lil-web build",
 		"check": "biome check .",
 		"check:fix": "biome check --fix .",
 		"format": "biome format --write ."

@@ -84,21 +84,17 @@ Config paths (dot-separated):
   agent.agentDir                    Override pi's agent dir
   agent.model.primary               Primary model (provider/model format)
   agent.model.fallbacks             Fallback models (JSON array)
-  channels.telegram.persona         Persona for Telegram (overrides agent.persona)
-  channels.telegram.botToken        Telegram bot token from @BotFather
-  channels.telegram.allowFrom       Allowed Telegram user IDs (JSON array)
-  channels.telegram.enabled         Enable/disable Telegram (default: true)
-  web.persona                       Persona for web UI (overrides agent.persona)
-  web.enabled                       Enable/disable web UI server (default: true)
-  web.host                          Web bind host (default: 127.0.0.1)
-  web.port                          Web bind port (default: 3333)
-  web.token                         Web auth token (auto-generated)
+  channels.slack.persona            Persona for Slack (overrides agent.persona)
+  channels.slack.appToken           Slack app token (xapp-...) for Socket Mode
+  channels.slack.botToken           Slack bot token (xoxb-...) for API calls
+  channels.slack.allowFrom          Allowed Slack user IDs (JSON array of strings)
+  channels.slack.enabled            Enable/disable Slack (default: true)
 
 Examples:
   lil login
-  lil config set channels.telegram.botToken "123456:ABC-DEF..."
-  lil config set channels.telegram.allowFrom [123456789]
-  lil config set web.enabled true
+  lil config set channels.slack.appToken "xapp-..."
+  lil config set channels.slack.botToken "xoxb-..."
+  lil config set channels.slack.allowFrom ["U12345678"]
   lil start                         # run in foreground
   lil daemon install                # install as system service (auto-start on boot)
   lil daemon logs                   # tail daemon logs
@@ -336,7 +332,7 @@ async function cmdConfig(args: string[]): Promise<void> {
 	if (sub === "get") {
 		const [path] = rest;
 		if (!path) {
-			console.error("Usage: lil config get <path>\n\nExample: lil config get channels.telegram.botToken");
+			console.error("Usage: lil config get <path>\n\nExample: lil config get channels.slack.botToken");
 			process.exit(1);
 		}
 		const config = loadConfig();
@@ -354,7 +350,7 @@ async function cmdConfig(args: string[]): Promise<void> {
 		const [path, ...valueParts] = rest;
 		if (!path) {
 			console.error(
-				'Usage: lil config set <path> <value>\n\nExample: lil config set channels.telegram.botToken "123:abc"',
+				'Usage: lil config set <path> <value>\n\nExample: lil config set channels.slack.botToken "xoxb-..."',
 			);
 			process.exit(1);
 		}
