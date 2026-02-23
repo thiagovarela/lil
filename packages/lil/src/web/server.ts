@@ -39,7 +39,7 @@ export async function startWebServer(config: LilConfig, deps: InternalWebServerD
 	const server = Bun.serve({
 		hostname: host,
 		port,
-		fetch: app.fetch,
+		fetch: (req, server) => app.fetch(req, { server }),
 		websocket: wsHandler,
 	});
 

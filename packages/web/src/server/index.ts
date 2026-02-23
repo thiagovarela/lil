@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { Hono } from "hono";
-import { authMiddleware } from "./middleware/auth.ts";
+import { authMiddleware, getAuthToken } from "./middleware/auth.ts";
 import { createApiRoutes } from "./routes/api.ts";
 import { createWebSocketHandler, upgradeWebSocket } from "./routes/ws.ts";
 import { serveStatic } from "./static.ts";
@@ -13,8 +13,7 @@ export function createWebApp(deps: WebServerDeps, lilDir: string) {
 
 	// WebSocket upgrade (must come before auth middleware for Bun's upgrade to work)
 	app.get("/ws", (c) => {
-		// Auth check happens in the upgrade handler
-		const authToken = c.req.header("authorization")?.substring(7).trim() || c.req.query("token");
+		const authToken = getAuthToken(c);
 		if (authToken !== deps.token) {
 			return c.json({ error: "Unauthorized" }, 401);
 		}
@@ -22,7 +21,7 @@ export function createWebApp(deps: WebServerDeps, lilDir: string) {
 	});
 
 	// API routes (authenticated)
-	app.route("/api", authMiddleware(deps.token));
+	app.use("/api/*", authMiddleware(deps.token));
 	app.route("/api", createApiRoutes(lilDir));
 
 	// Static file serving (unauthenticated — auth happens via cookie on first visit)
