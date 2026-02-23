@@ -4,9 +4,10 @@
  */
 
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
+import { icon } from "@mariozechner/mini-lit/dist/icons.js";
 import { html, LitElement } from "lit";
-import { customElement, state as litState, property } from "lit/decorators.js";
-import { createRef, type Ref, ref } from "lit/directives/ref.js";
+import { customElement, property, state as litState } from "lit/decorators.js";
+import { createRef, ref, type Ref } from "lit/directives/ref.js";
 import { Paperclip, Send, Square } from "lucide";
 import type { Attachment } from "../types.ts";
 
@@ -149,7 +150,7 @@ export class MessageInput extends LitElement {
 						size: "icon",
 						disabled: this.disabled || this.isStreaming,
 						onClick: this.openFilePicker.bind(this),
-						children: Paperclip({ size: 20 }),
+						children: icon(Paperclip, "sm"),
 					})}
 
 					<!-- Text input -->
@@ -165,22 +166,20 @@ export class MessageInput extends LitElement {
 					></textarea>
 
 					<!-- Send/Abort button -->
-					${
-						this.isStreaming
-							? Button({
-									variant: "destructive",
-									size: "icon",
-									onClick: this.handleAbort.bind(this),
-									children: Square({ size: 20 }),
-								})
-							: Button({
-									variant: "primary",
-									size: "icon",
-									disabled: this.disabled || (!this.value.trim() && this.attachments.length === 0),
-									onClick: this.handleSend.bind(this),
-									children: Send({ size: 20 }),
-								})
-					}
+					${this.isStreaming
+						? Button({
+								variant: "destructive",
+								size: "icon",
+								onClick: this.handleAbort.bind(this),
+								children: icon(Square, "sm"),
+							})
+						: Button({
+								variant: "primary",
+								size: "icon",
+								disabled: this.disabled || (!this.value.trim() && this.attachments.length === 0),
+								onClick: this.handleSend.bind(this),
+								children: icon(Send, "sm"),
+							})}
 				</div>
 			</div>
 		`;
