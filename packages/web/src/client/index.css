@@ -3,14 +3,13 @@
  */
 
 @import "tailwindcss";
-@import "@mariozechner/mini-lit/dist/theme.css";
 
 /* Highlight.js theme for code syntax highlighting */
 @import "highlight.js/styles/github-dark.css";
 
 /* Tailwind source paths */
 @source "../**/*.{ts,tsx,html}";
-@source "../../node_modules/@mariozechner/mini-lit/dist/**/*.{js,css}";
+@source "../../node_modules/@mariozechner/mini-lit/dist/**/*.js";
 
 /* Base styles */
 * {
