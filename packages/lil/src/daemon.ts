@@ -7,7 +7,7 @@
  * Each chat gets its own persistent session (keyed by channel+chatId).
  */
 
-import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ImageContent } from "@mariozechner/pi-ai";
 import {
@@ -20,9 +20,8 @@ import {
 	SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import type { Attachment, Channel, InboundMessage } from "./channels/channel.ts";
-import { TelegramChannel } from "./channels/telegram.ts";
+import { SlackChannel } from "./channels/slack.ts";
 import {
-	ensureWebToken,
 	getAgentDir,
 	getAuthPath,
 	getLilDir,
@@ -74,21 +73,6 @@ const sessionCache = new Map<string, AgentSession>();
 
 // Track active session name per chat (for /switch command)
 const activeSessionNames = new Map<string, string>();
-
-export function listSessionNames(chatIdentifier: string): string[] {
-	const sessionDir = join(getLilDir(), "sessions");
-	if (!existsSync(sessionDir)) return [];
-
-	const prefix = `${chatIdentifier}_`;
-	return readdirSync(sessionDir)
-		.filter((dir) => dir.startsWith(prefix))
-		.map((dir) => dir.substring(prefix.length))
-		.sort((a, b) => a.localeCompare(b));
-}
-
-export function resetSession(chatKey: string): void {
-	sessionCache.delete(chatKey);
-}
 
 async function getOrCreateSession(
 	chatKey: string,
@@ -199,10 +183,6 @@ async function getOrCreateSession(
 	return session;
 }
 
-export async function getSessionByKey(chatKey: string, config: LilConfig, personaName?: string): Promise<AgentSession> {
-	return getOrCreateSession(chatKey, config, personaName ?? "default");
-}
-
 // ─── Attachment helpers ────────────────────────────────────────────────────────
 
 const IMAGE_MIME_PREFIXES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -285,10 +265,9 @@ async function processMessage(
 
 	// Resolve persona: channel config → global config → "default"
 	let personaName = config.agent?.persona ?? "default";
-	if (message.channel === "telegram" && config.channels?.telegram?.persona) {
-		personaName = config.channels.telegram.persona;
+	if (message.channel === "slack" && config.channels?.slack?.persona) {
+		personaName = config.channels.slack.persona;
 	}
-	// Future: add web, whatsapp, etc.
 
 	const attachCount = message.attachments?.length ?? 0;
 	const preview = message.text.slice(0, 100) || (attachCount > 0 ? `[${attachCount} attachment(s)]` : "[empty]");
@@ -417,33 +396,27 @@ async function processMessage(
 // ─── Daemon lifecycle ──────────────────────────────────────────────────────────
 
 export async function startDaemon(): Promise<void> {
-	let config = loadConfig();
+	const config = loadConfig();
 	const channels: Channel[] = [];
-	const webEnabled = config.web?.enabled !== false;
 
-	// Ensure web token exists when web UI is enabled
-	if (webEnabled && !config.web?.token) {
-		ensureWebToken(config);
-		config = loadConfig();
-	}
-
-	// Telegram
-	const tg = config.channels?.telegram;
-	if (tg?.botToken && tg.enabled !== false) {
+	// Slack
+	const slack = config.channels?.slack;
+	if (slack?.appToken && slack.botToken && slack.enabled !== false) {
 		channels.push(
-			new TelegramChannel({
-				token: tg.botToken,
-				allowedUsers: tg.allowFrom ?? [],
+			new SlackChannel({
+				appToken: slack.appToken,
+				botToken: slack.botToken,
+				allowedUsers: slack.allowFrom ?? [],
 			}),
 		);
 	}
 
-	if (channels.length === 0 && !webEnabled) {
+	if (channels.length === 0) {
 		console.error(
-			"No channels configured and web UI disabled. Set up one of the following:\n\n" +
-				"  lil config set channels.telegram.botToken <your-bot-token>\n" +
-				"  lil config set channels.telegram.allowFrom [your-telegram-user-id]\n" +
-				"  lil config set web.enabled true\n" +
+			"No channels configured. Set up Slack:\n\n" +
+				"  lil config set channels.slack.appToken <xapp-...>\n" +
+				"  lil config set channels.slack.botToken <xoxb-...>\n" +
+				'  lil config set channels.slack.allowFrom ["U12345678"]\n' +
 				"\nOr edit ~/.lil/lil.json directly.\n",
 		);
 		process.exit(1);
@@ -451,17 +424,6 @@ export async function startDaemon(): Promise<void> {
 
 	// Write PID file
 	writePidFile();
-
-	// Optional web server
-	let webHandle: { stop: () => void } | undefined;
-	if (webEnabled) {
-		const { startWebServer } = await import("./web/server.ts");
-		webHandle = await startWebServer(config, {
-			getSession: getSessionByKey,
-			resetSession,
-			listSessionNames,
-		});
-	}
 
 	// ─── Heartbeat service ──────────────────────────────────────────────
 
@@ -514,7 +476,6 @@ export async function startDaemon(): Promise<void> {
 	const shutdown = async (signal: string) => {
 		console.log(`\n[daemon] Received ${signal}, shutting down...`);
 		heartbeat.stop();
-		webHandle?.stop();
 		for (const ch of channels) {
 			await ch.stop().catch(() => {});
 		}
@@ -530,7 +491,6 @@ export async function startDaemon(): Promise<void> {
 	console.log(`[daemon] Starting lil daemon (pid ${process.pid})...`);
 	console.log(`[daemon] Workspace: ${getWorkspace(config)}`);
 	console.log(`[daemon] Channels: ${channels.length > 0 ? channels.map((c) => c.name).join(", ") : "(none)"}`);
-	console.log(`[daemon] Web UI: ${webEnabled ? "enabled" : "disabled"}`);
 
 	for (const ch of channels) {
 		await ch.start((msg) => {
