@@ -13,6 +13,7 @@ import type { Session } from "./types.ts";
 import { WsClient } from "./ws-client.ts";
 import "./components/chat.ts";
 import "./components/sidebar.ts";
+import { handleWsMessage } from "./ws-handler.ts";
 
 @customElement("lil-app")
 export class App extends LitElement {
@@ -41,19 +42,10 @@ export class App extends LitElement {
 			this.currentSessionId = state.currentSessionId;
 		});
 
-		// Handle WebSocket messages
+		// Handle ALL WebSocket messages centrally and update global state
+		// This ensures messages are processed even before child components mount
 		this.wsClient.subscribe((message) => {
-			if (message.type === "ready") {
-				state.setConnected(true);
-				// Store available sessions
-				const sessions = message.sessions.map((name) => ({ id: name }));
-				state.setSessions(sessions);
-				state.setCurrentSession(message.sessionName);
-			} else if (message.type === "response" && (message as { sessions?: string[] }).sessions) {
-				// Response from session.list command
-				const sessions = ((message as { sessions?: string[] }).sessions || []).map((name) => ({ id: name }));
-				state.setSessions(sessions);
-			}
+			handleWsMessage(message);
 		});
 
 		// Set initial state
