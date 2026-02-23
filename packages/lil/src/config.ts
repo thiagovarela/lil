@@ -9,6 +9,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import JSON5 from "json5";
@@ -18,6 +19,8 @@ import JSON5 from "json5";
 export interface LilConfig {
   /** Agent runtime settings */
   agent?: {
+    /** Default persona name (default: "default") */
+    persona?: string;
     /** Working directory for the agent (default: ~/.lil/workspace) */
     workspace?: string;
     /** Override for pi's agent dir (default: ~/.lil) */
@@ -35,13 +38,14 @@ export interface LilConfig {
   channels?: {
     telegram?: {
       enabled?: boolean;
+      /** Persona name override for this channel */
+      persona?: string;
       /** Bot token from @BotFather */
       botToken?: string;
       /** Allowed Telegram user IDs */
       allowFrom?: number[];
     };
     // Future channels:
-    // discord?: { ... };
     // whatsapp?: { ... };
     // signal?: { ... };
   };
@@ -49,6 +53,20 @@ export interface LilConfig {
   /** Cron / scheduled jobs */
   cron?: {
     enabled?: boolean;
+  };
+
+  /** Web UI server */
+  web?: {
+    /** Enable web server (default: true) */
+    enabled?: boolean;
+    /** Persona name override for this channel */
+    persona?: string;
+    /** Bind host (default: 127.0.0.1) */
+    host?: string;
+    /** Bind port (default: 3333) */
+    port?: number;
+    /** Bearer/cookie token for API + WebSocket auth */
+    token?: string;
   };
 
   /** Heartbeat — periodic task execution */
@@ -98,6 +116,18 @@ export function getAuthPath(): string {
 /** Path to the config file */
 export function getConfigPath(): string {
   return CONFIG_PATH;
+}
+
+/** Returns a valid web auth token, generating and persisting one if needed. */
+export function ensureWebToken(config?: LilConfig): string {
+  const current = config ?? loadConfig();
+  const token = current.web?.token;
+  if (token && token.length >= 16) return token;
+
+  const nextToken = randomUUID();
+  const updated = setByPath(current, "web.token", nextToken);
+  saveConfig(updated);
+  return nextToken;
 }
 
 // ─── Loading & saving ─────────────────────────────────────────────────────────
@@ -251,5 +281,38 @@ function migrateFromLegacy(): void {
     console.log(`Migrated config: ${LEGACY_CONFIG_PATH} → ${CONFIG_PATH}`);
   } catch {
     // Migration failed — non-fatal
+  }
+}
+
+// ─── Persona helpers ──────────────────────────────────────────────────────────
+
+/** Returns the path to the personas directory (~/.lil/personas/), creating it if needed. */
+export function getPersonasDir(): string {
+  const dir = join(getLilDir(), "personas");
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  return dir;
+}
+
+/** Returns the path to a specific persona directory. */
+export function getPersonaDir(personaName: string): string {
+  return join(getPersonasDir(), personaName);
+}
+
+/**
+ * Load persona-specific model configuration from persona.json.
+ * Returns the model spec (provider/model) if set, otherwise undefined.
+ */
+export function resolvePersonaModel(personaName: string): string | undefined {
+  const configPath = join(getPersonaDir(personaName), "persona.json");
+  if (!existsSync(configPath)) return undefined;
+
+  try {
+    const raw = readFileSync(configPath, "utf-8");
+    const config = JSON5.parse(raw) as { model?: string };
+    return config.model;
+  } catch {
+    return undefined;
   }
 }
