@@ -7,7 +7,7 @@
 import type { Attachment } from "@mariozechner/pi-web-ui";
 import { html, LitElement } from "lit";
 import { customElement, state as litState } from "lit/decorators.js";
-import { createRef, ref, type Ref } from "lit/directives/ref.js";
+import { createRef, type Ref, ref } from "lit/directives/ref.js";
 import { state } from "./state.ts";
 import { uploadAttachments } from "./uploads.ts";
 import type { WsClient } from "./ws-client.ts";

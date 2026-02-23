@@ -90,11 +90,12 @@ export class LilSessions extends LitElement {
 					<span class="text-xs text-muted-foreground ml-2">(${currentState.sessions.length} sessions)</span>
 				`,
 			})}
-			${this.isOpen
-				? Dialog({
-						isOpen: this.isOpen,
-						onClose: () => this.handleClose(),
-						children: html`
+			${
+				this.isOpen
+					? Dialog({
+							isOpen: this.isOpen,
+							onClose: () => this.handleClose(),
+							children: html`
 							${DialogContent(html`
 								${DialogHeader({
 									title: "Sessions",
@@ -102,24 +103,29 @@ export class LilSessions extends LitElement {
 								})}
 
 								<div class="space-y-2 max-h-[400px] overflow-y-auto">
-									${currentState.sessions.length === 0
-										? html`<div class="text-center text-muted-foreground py-8">No sessions yet</div>`
-										: currentState.sessions.map(
-												(sessionName) => html`
+									${
+										currentState.sessions.length === 0
+											? html`<div class="text-center text-muted-foreground py-8">No sessions yet</div>`
+											: currentState.sessions.map(
+													(sessionName) => html`
 													<button
-														class="w-full text-left px-4 py-3 rounded-lg hover:bg-accent transition ${sessionName ===
-														currentState.sessionName
-															? "bg-accent border-2 border-primary"
-															: "border border-border"}"
+														class="w-full text-left px-4 py-3 rounded-lg hover:bg-accent transition ${
+															sessionName === currentState.sessionName
+																? "bg-accent border-2 border-primary"
+																: "border border-border"
+														}"
 														@click=${() => this.handleSwitch(sessionName)}
 													>
 														<div class="font-medium">${sessionName}</div>
-														${sessionName === currentState.sessionName
-															? html`<div class="text-xs text-muted-foreground mt-1">Active</div>`
-															: null}
+														${
+															sessionName === currentState.sessionName
+																? html`<div class="text-xs text-muted-foreground mt-1">Active</div>`
+																: null
+														}
 													</button>
 												`,
-											)}
+												)
+									}
 								</div>
 
 								${DialogFooter(html`
@@ -136,8 +142,9 @@ export class LilSessions extends LitElement {
 								`)}
 							`)}
 						`,
-					})
-				: null}
+						})
+					: null
+			}
 		`;
 	}
 }
