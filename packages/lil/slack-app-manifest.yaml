@@ -16,6 +16,7 @@ oauth_config:
       - channels:history
       - channels:read
       - files:read
+      - groups:history
       - im:history
 
 settings:
