@@ -1,0 +1,31 @@
+display_information:
+  name: lil
+  description: Your AI assistant in Slack
+  background_color: "#1a1a2e"
+
+features:
+  bot_user:
+    display_name: lil
+    always_online: true
+
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - chat:write
+      - channels:history
+      - channels:read
+      - files:read
+      - im:history
+
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.im
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false

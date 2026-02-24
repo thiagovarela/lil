@@ -43,59 +43,37 @@ Now `lil` is available from anywhere. If you skip this, use `bun run packages/li
 
 ## Slack Setup
 
-### Step 1: Create Slack App
+### Step 1: Create Slack App from Manifest
 
 1. Go to **https://api.slack.com/apps**
-2. Click **Create New App** → **From scratch**
-3. Name: `lil` (or whatever you want)
-4. Pick your workspace
-5. Click **Create App**
+2. Click **Create New App** → **From an app manifest**
+3. Select your workspace and click **Next**
+4. Choose **YAML** tab and paste the contents of [`slack-app-manifest.yaml`](./slack-app-manifest.yaml)
+5. Click **Next** → Review the summary → Click **Create**
 
-### Step 2: Enable Socket Mode
+### Step 2: Generate App Token (for Socket Mode)
 
-1. In your app settings, go to **Socket Mode**
-2. Toggle **Enable Socket Mode** to ON
-3. When prompted for a token name, enter: `lil-socket`
-4. Click **Generate**
-5. **Copy the token** (starts with `xapp-`) — you'll need this for config
+1. Go to **Basic Information** (in the sidebar)
+2. Scroll to **App-Level Tokens** → Click **Generate Token and Scopes**
+3. Name: `lil-socket`
+4. Click **Add Scope** → Select `connections:write`
+5. Click **Generate**
+6. **Copy the token** (starts with `xapp-`) — you'll need this for config
 
-### Step 3: Add Bot Scopes
-
-1. Go to **OAuth & Permissions**
-2. Scroll to **Scopes** → **Bot Token Scopes**
-3. Add these scopes:
-   - `app_mentions:read` — Let bot see @mentions
-   - `chat:write` — Let bot send messages
-   - `channels:history` — Read channel messages
-   - `channels:read` — See channel info
-   - `files:read` — Download files users share
-   - `im:history` — Read DM history
-
-### Step 4: Subscribe to Events
-
-1. Go to **Event Subscriptions**
-2. Toggle **Enable Events** to ON
-3. Scroll to **Subscribe to bot events**
-4. Add these events:
-   - `app_mention` — When bot is @mentioned
-   - `message.channels` — Channel messages (for thread conversations)
-   - `message.im` — Direct messages
-5. Click **Save Changes**
-
-### Step 5: Install App to Workspace
+### Step 3: Install App to Workspace
 
 1. Go to **Install App** (in the sidebar)
 2. Click **Install to Workspace**
 3. Review permissions and click **Allow**
 4. **Copy the Bot Token** (starts with `xoxb-`) — you'll need this for config
 
-### Step 6: Get Your Slack User ID
+### Step 4: Get Your Slack User ID
 
 1. In Slack, click your profile picture → **View profile**
 2. Click the three dots (**⋯**) → **Copy member ID**
 3. Save this ID (looks like `U01ABC23DEF`)
 
-### Step 7: Configure lil
+### Step 5: Configure lil
 
 ```bash
 lil config set channels.slack.appToken "xapp-1-A0AG6UWU92B-..."
@@ -104,11 +82,11 @@ lil config set channels.slack.allowFrom '["U01ABC23DEF"]'
 ```
 
 Replace:
-- `xapp-...` with your Socket Mode token from Step 2
-- `xoxb-...` with your Bot Token from Step 5
-- `U01ABC23DEF` with your user ID from Step 6
+- `xapp-...` with your App Token from Step 2
+- `xoxb-...` with your Bot Token from Step 3
+- `U01ABC23DEF` with your user ID from Step 4
 
-### Step 8: Authenticate with AI Provider
+### Step 6: Authenticate with AI Provider
 
 ```bash
 lil login
@@ -116,7 +94,7 @@ lil login
 
 Choose your provider (Anthropic, OpenAI, etc.) and authenticate. Credentials are stored securely in `~/.lil/auth.json`.
 
-### Step 9: Start lil
+### Step 7: Start lil
 
 ```bash
 lil start
@@ -131,7 +109,7 @@ You should see:
 [daemon] Ready. Waiting for messages...
 ```
 
-### Step 10: Test in Slack
+### Step 8: Test in Slack
 
 1. **Invite the bot to a channel**: Type `/invite @lil` in any channel
 2. **@mention it**: `@lil hello!`
