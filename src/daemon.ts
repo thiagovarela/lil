@@ -9,27 +9,19 @@
 
 import { existsSync, readFileSync, unlinkSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ImageContent } from "@mariozechner/pi-ai";
-import {
-	type AgentSession,
-	AuthStorage,
-	type CreateAgentSessionResult,
-	createAgentSession,
-	DefaultResourceLoader,
-	ModelRegistry,
-	SessionManager,
-} from "@mariozechner/pi-coding-agent";
-import type { Attachment, Channel, InboundMessage } from "./channels/channel.ts";
+import type { Channel, InboundMessage } from "./channels/channel.ts";
 import { SlackChannel } from "./channels/slack.ts";
+import { WebChannel } from "./channels/web.ts";
+import { getAppDir, getConfigPath, getWorkspace, loadConfig } from "./config.ts";
 import {
-	type AppConfig,
-	getAgentDir,
-	getAppDir,
-	getAuthPath,
-	getConfigPath,
-	getWorkspace,
-	loadConfig,
-} from "./config.ts";
+	getActiveSessionName,
+	getOrCreateSession,
+	listSessionNames,
+	saveNonImageAttachments,
+	setActiveSessionName,
+	toImageContents,
+	withChatLock,
+} from "./sessions.ts";
 
 // ─── PID file management ──────────────────────────────────────────────────────
 
@@ -62,198 +54,14 @@ function cleanupPidFile(): void {
 	}
 }
 
-// ─── Session cache (one session per chat) ──────────────────────────────────────
-
-const sessionCache = new Map<string, AgentSession>();
-
-// Track active session name per chat (for /switch command)
-const activeSessionNames = new Map<string, string>();
-
 // ─── Daemon state tracking (for config reload) ────────────────────────────────
 
 let activeChannels: Channel[] = [];
 let configWatcher: ReturnType<typeof watch> | null = null;
 
-async function getOrCreateSession(chatKey: string, config: AppConfig): Promise<AgentSession> {
-	const cached = sessionCache.get(chatKey);
-	if (cached) return cached;
-
-	const agentDir = getAgentDir(config);
-	const cwd = getWorkspace(config);
-
-	const authStorage = AuthStorage.create(getAuthPath());
-	const modelRegistry = new ModelRegistry(authStorage);
-
-	const loader = new DefaultResourceLoader({
-		cwd,
-		agentDir,
-	});
-	await loader.reload();
-
-	// Use a stable session directory per chat so conversations persist across restarts
-	const sessionDir = join(getAppDir(), "sessions", chatKey);
-
-	const sessionManager = SessionManager.continueRecent(cwd, sessionDir);
-
-	// Resolve model from config → pi auto-detection
-	const modelSpec = config.agent?.model?.primary;
-	let model: ReturnType<typeof modelRegistry.find> | undefined;
-	if (modelSpec) {
-		const slash = modelSpec.indexOf("/");
-		if (slash !== -1) {
-			const provider = modelSpec.substring(0, slash);
-			const modelId = modelSpec.substring(slash + 1);
-			model = modelRegistry.find(provider, modelId);
-			if (!model) {
-				console.warn(`[daemon] Warning: model "${modelSpec}" from config not found, falling back to auto-detection`);
-			}
-		}
-	}
-
-	const result: CreateAgentSessionResult = await createAgentSession({
-		cwd,
-		agentDir,
-		authStorage,
-		modelRegistry,
-		resourceLoader: loader,
-		sessionManager,
-		model,
-	});
-
-	const { session } = result;
-
-	// Bind extensions (headless — no UI)
-	await session.bindExtensions({
-		commandContextActions: {
-			waitForIdle: () => session.agent.waitForIdle(),
-			newSession: async (opts) => {
-				const success = await session.newSession({ parentSession: opts?.parentSession });
-				if (success && opts?.setup) {
-					await opts.setup(session.sessionManager);
-				}
-				return { cancelled: !success };
-			},
-			fork: async (entryId) => {
-				const r = await session.fork(entryId);
-				return { cancelled: r.cancelled };
-			},
-			navigateTree: async (targetId, opts) => {
-				const r = await session.navigateTree(targetId, {
-					summarize: opts?.summarize,
-					customInstructions: opts?.customInstructions,
-					replaceInstructions: opts?.replaceInstructions,
-					label: opts?.label,
-				});
-				return { cancelled: r.cancelled };
-			},
-			switchSession: async (sessionPath) => {
-				const success = await session.switchSession(sessionPath);
-				return { cancelled: !success };
-			},
-			reload: async () => {
-				await session.reload();
-			},
-		},
-		onError: (err) => {
-			console.error(`[daemon] Extension error (${err.extensionPath}): ${err.error}`);
-		},
-	});
-
-	// Subscribe to enable session persistence
-	session.subscribe(() => {});
-
-	sessionCache.set(chatKey, session);
-	return session;
-}
-
-// ─── Session helpers ───────────────────────────────────────────────────────────
-
-/**
- * List all session names for a given chat identifier.
- * Scans ~/.clankie/sessions/ for directories matching the chatIdentifier prefix.
- */
-function listSessionNames(chatIdentifier: string): string[] {
-	const sessionsDir = join(getAppDir(), "sessions");
-	if (!existsSync(sessionsDir)) {
-		return [];
-	}
-
-	try {
-		const { readdirSync, statSync } = require("node:fs");
-		const entries = readdirSync(sessionsDir);
-		const sessionNames = new Set<string>();
-
-		for (const entry of entries) {
-			// Session directories are named: {channel}_{chatId}_{personaName}_{sessionName}
-			// We want to extract unique sessionNames for this chatIdentifier
-			if (entry.startsWith(`${chatIdentifier}_`)) {
-				const entryPath = join(sessionsDir, entry);
-				if (statSync(entryPath).isDirectory()) {
-					// Extract session name from: chatIdentifier_personaName_sessionName
-					const parts = entry.substring(chatIdentifier.length + 1).split("_");
-					// parts[0] is personaName, rest is sessionName
-					if (parts.length >= 2) {
-						const sessionName = parts.slice(1).join("_");
-						sessionNames.add(sessionName);
-					}
-				}
-			}
-		}
-
-		return Array.from(sessionNames).sort();
-	} catch (err) {
-		console.error(`[daemon] Error listing session names: ${err instanceof Error ? err.message : String(err)}`);
-		return [];
-	}
-}
-
-// ─── Attachment helpers ────────────────────────────────────────────────────────
-
-const IMAGE_MIME_PREFIXES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-
-/** Convert image attachments to pi's ImageContent format for vision models. */
-function toImageContents(attachments?: Attachment[]): ImageContent[] {
-	if (!attachments) return [];
-	return attachments
-		.filter((a) => IMAGE_MIME_PREFIXES.some((prefix) => a.mimeType.startsWith(prefix)))
-		.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }));
-}
-
-/** Save non-image attachments to disk and return their paths. */
-async function saveNonImageAttachments(
-	attachments: Attachment[] | undefined,
-	chatKey: string,
-): Promise<{ fileName: string; path: string }[]> {
-	if (!attachments) return [];
-
-	const nonImages = attachments.filter((a) => !IMAGE_MIME_PREFIXES.some((prefix) => a.mimeType.startsWith(prefix)));
-	if (nonImages.length === 0) return [];
-
-	const { mkdirSync, writeFileSync } = await import("node:fs");
-	const { join } = await import("node:path");
-
-	const dir = join(getAppDir(), "attachments", chatKey);
-	mkdirSync(dir, { recursive: true });
-
-	const results: { fileName: string; path: string }[] = [];
-	for (const att of nonImages) {
-		const name = att.fileName || `file_${Date.now()}`;
-		const filePath = join(dir, name);
-		writeFileSync(filePath, Buffer.from(att.data, "base64"));
-		results.push({ fileName: name, path: filePath });
-		console.log(`[daemon] Saved attachment: ${filePath} (${att.mimeType})`);
-	}
-	return results;
-}
-
 // ─── Message handling ──────────────────────────────────────────────────────────
 
-/** Lock to serialize message processing per chat */
-const chatLocks = new Map<string, Promise<void>>();
-
 async function handleMessage(message: InboundMessage, channel: Channel): Promise<void> {
-	const _config = loadConfig();
-
 	// Determine session name:
 	// 1. For forum topics (threadId present) → use threadId
 	// 2. For regular chats → use active session name or "default"
@@ -265,19 +73,13 @@ async function handleMessage(message: InboundMessage, channel: Channel): Promise
 		sessionName = message.threadId;
 	} else {
 		// Regular chat — use active session name
-		sessionName = activeSessionNames.get(chatIdentifier) ?? "default";
+		sessionName = getActiveSessionName(chatIdentifier);
 	}
 
 	const chatKey = `${chatIdentifier}_${sessionName}`;
 
 	// Serialize messages per chat — wait for previous message to finish
-	const previous = chatLocks.get(chatKey) ?? Promise.resolve();
-	const current = previous.then(() => processMessage(message, channel, chatKey, chatIdentifier, sessionName));
-	chatLocks.set(
-		chatKey,
-		current.catch(() => {}),
-	); // swallow errors in the chain
-	await current;
+	await withChatLock(chatKey, () => processMessage(message, channel, chatKey, chatIdentifier, sessionName));
 }
 
 async function processMessage(
@@ -309,7 +111,7 @@ async function processMessage(
 				return;
 			}
 
-			activeSessionNames.set(chatIdentifier, newSessionName);
+			setActiveSessionName(chatIdentifier, newSessionName);
 			console.log(`[daemon] Switched ${chatIdentifier} to session "${newSessionName}"`);
 			await channel.send(
 				message.chatId,
@@ -438,12 +240,28 @@ async function initializeChannels(): Promise<void> {
 		);
 	}
 
+	// Web
+	const web = config.channels?.web;
+	if (web?.authToken && web.enabled !== false) {
+		channels.push(
+			new WebChannel({
+				port: web.port ?? 3100,
+				authToken: web.authToken,
+				allowedOrigins: web.allowedOrigins,
+			}),
+		);
+	}
+
 	if (channels.length === 0) {
 		console.error(
-			"No channels configured. Set up Slack:\n\n" +
+			"No channels configured. Set up Slack or Web:\n\n" +
+				"Slack:\n" +
 				"  clankie config set channels.slack.appToken <xapp-...>\n" +
 				"  clankie config set channels.slack.botToken <xoxb-...>\n" +
 				'  clankie config set channels.slack.allowFrom ["U12345678"]\n' +
+				"\nWeb:\n" +
+				'  clankie config set channels.web.authToken "your-secret-token"\n' +
+				"  clankie config set channels.web.port 3100\n" +
 				"\nOr edit ~/.clankie/clankie.json directly.\n",
 		);
 		process.exit(1);
@@ -476,9 +294,7 @@ async function restartDaemon(): Promise<void> {
 	}
 	activeChannels = [];
 
-	// Clear session cache (sessions are persisted to disk, so no data loss)
-	sessionCache.clear();
-
+	// Sessions remain cached in sessions.ts and will be reused across restarts
 	// Reinitialize with fresh config
 	await initializeChannels();
 

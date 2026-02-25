@@ -44,6 +44,15 @@ export interface AppConfig {
 			/** Allowed Slack channel IDs (empty = allow all) */
 			allowedChannelIds?: string[];
 		};
+		web?: {
+			enabled?: boolean;
+			/** Port to listen on (default: 3100) */
+			port?: number;
+			/** Required shared secret for authentication */
+			authToken?: string;
+			/** Allowed origins for CORS-like validation (empty = allow all) */
+			allowedOrigins?: string[];
+		};
 	};
 }
 
