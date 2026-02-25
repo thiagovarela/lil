@@ -10,7 +10,7 @@
  */
 
 import * as crypto from "node:crypto";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { ImageContent, OAuthLoginCallbacks } from "@mariozechner/pi-ai";
@@ -924,6 +924,55 @@ export class WebChannel implements Channel {
 
 	// ─── Helpers ───────────────────────────────────────────────────────────────
 
+	/**
+	 * Extract title from a session directory by reading the last user message from JSONL files
+	 */
+	private getSessionTitleFromDisk(sessionPath: string): string | undefined {
+		try {
+			// Find the most recent .jsonl file
+			const files = readdirSync(sessionPath)
+				.filter((f) => f.endsWith(".jsonl"))
+				.map((f) => ({
+					name: f,
+					path: join(sessionPath, f),
+					mtime: statSync(join(sessionPath, f)).mtime.getTime(),
+				}))
+				.sort((a, b) => b.mtime - a.mtime);
+
+			if (files.length === 0) return undefined;
+
+			// Read the most recent file and parse JSONL
+			const content = readFileSync(files[0].path, "utf-8");
+			const lines = content.trim().split("\n");
+
+			// Find the last user message
+			let lastUserMessage: string | undefined;
+			for (let i = lines.length - 1; i >= 0; i--) {
+				try {
+					const entry = JSON.parse(lines[i]);
+					if (entry.type === "message" && entry.message?.role === "user") {
+						// Extract text content
+						const textContent = entry.message.content
+							?.filter((c: any) => c.type === "text")
+							.map((c: any) => c.text)
+							.join(" ");
+						if (textContent) {
+							lastUserMessage = textContent.substring(0, 100);
+							break;
+						}
+					}
+				} catch {
+					// Skip invalid JSON lines
+					continue;
+				}
+			}
+
+			return lastUserMessage;
+		} catch (err) {
+			return undefined;
+		}
+	}
+
 	private async listAllSessions(): Promise<
 		Array<{ sessionId: string; title?: string; messageCount: number }>
 	> {
@@ -958,8 +1007,8 @@ export class WebChannel implements Channel {
 					}
 				});
 
-			// For each session directory, check if it's in memory or load metadata
-			for (const { sessionId } of webSessions) {
+			// For each session directory, check if it's in memory or read from disk
+			for (const { sessionId, path } of webSessions) {
 				const inMemorySession = this.sessions.get(sessionId);
 
 				if (inMemorySession) {
@@ -971,13 +1020,19 @@ export class WebChannel implements Channel {
 					
 					let title: string | undefined;
 					if (lastUserMessage) {
-						// Extract text from content array
-						const textContent = lastUserMessage.content
-							?.filter((c: any) => c.type === "text")
-							.map((c: any) => c.text)
-							.join(" ");
-						title = textContent?.substring(0, 100) || inMemorySession.sessionName;
-					} else {
+						// Extract text from content
+						if (typeof lastUserMessage.content === "string") {
+							title = lastUserMessage.content.substring(0, 100);
+						} else if (Array.isArray(lastUserMessage.content)) {
+							const textContent = lastUserMessage.content
+								.filter((c: any) => c.type === "text")
+								.map((c: any) => c.text)
+								.join(" ");
+							title = textContent?.substring(0, 100) || inMemorySession.sessionName;
+						}
+					}
+					
+					if (!title) {
 						title = inMemorySession.sessionName;
 					}
 
@@ -987,12 +1042,13 @@ export class WebChannel implements Channel {
 						messageCount: inMemorySession.messages.length,
 					});
 				} else {
-					// For sessions not in memory, we can't easily get metadata without loading them
-					// Just include the sessionId for now - they'll be loaded on demand
+					// For sessions not in memory, read title from disk
+					const title = this.getSessionTitleFromDisk(path);
+					
 					sessions.push({
 						sessionId,
-						title: undefined,
-						messageCount: 0,
+						title,
+						messageCount: 0, // We don't count messages for sessions not in memory
 					});
 				}
 			}

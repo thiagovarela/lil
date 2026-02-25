@@ -43,9 +43,10 @@ function SettingsPage() {
 	};
 
 	return (
-		<div className="container max-w-2xl py-8">
-			<Card>
-				<CardHeader>
+		<div className="h-full overflow-y-auto">
+			<div className="container max-w-2xl py-8 px-4">
+				<Card>
+					<CardHeader>
 					<CardTitle>Connection Settings</CardTitle>
 					<CardDescription>Configure the WebSocket connection to your clankie instance</CardDescription>
 				</CardHeader>
@@ -103,14 +104,14 @@ function SettingsPage() {
 							<p className="text-xs mt-1">Configure the token in clankie and enter it above to connect.</p>
 						</div>
 					)}
-				</CardContent>
-			</Card>
+					</CardContent>
+				</Card>
 
-			<Card className="mt-4">
-				<CardHeader>
-					<CardTitle>Setup Instructions</CardTitle>
-				</CardHeader>
-				<CardContent className="space-y-3 text-sm">
+				<Card className="mt-4">
+					<CardHeader>
+						<CardTitle>Setup Instructions</CardTitle>
+					</CardHeader>
+					<CardContent className="space-y-3 text-sm">
 					<div>
 						<p className="font-medium">1. Enable the web channel in clankie</p>
 						<code className="block mt-1 rounded bg-muted p-2 text-xs">
@@ -131,10 +132,11 @@ function SettingsPage() {
 							The web-ui will connect to ws://localhost:3100 by default
 						</p>
 					</div>
-				</CardContent>
-			</Card>
+					</CardContent>
+				</Card>
 
-			{isConnected && <ProviderAuthSection />}
+				{isConnected && <ProviderAuthSection />}
+			</div>
 		</div>
 	);
 }
