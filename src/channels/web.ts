@@ -11,10 +11,10 @@
 
 import * as crypto from "node:crypto";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import type { ImageContent } from "@mariozechner/pi-ai";
-import type { AgentSession, AgentSessionEvent } from "@mariozechner/pi-coding-agent";
+import type { ImageContent, OAuthLoginCallbacks } from "@mariozechner/pi-ai";
+import { type AgentSession, type AgentSessionEvent, AuthStorage } from "@mariozechner/pi-coding-agent";
 import type { ServerWebSocket } from "bun";
-import { loadConfig } from "../config.ts";
+import { getAuthPath, loadConfig } from "../config.ts";
 import { getOrCreateSession } from "../sessions.ts";
 import type { Channel, MessageHandler } from "./channel.ts";
 
@@ -37,8 +37,8 @@ interface InboundWebMessage {
 
 /** Outbound message to client */
 interface OutboundWebMessage {
-	sessionId: string;
-	event: AgentSessionEvent | RpcResponse | RpcExtensionUIRequest;
+	sessionId: string; // "_auth" for auth events
+	event: AgentSessionEvent | RpcResponse | RpcExtensionUIRequest | AuthEvent;
 }
 
 /** RPC command types from pi */
@@ -70,12 +70,26 @@ type RpcCommand =
 	| { id?: string; type: "get_last_assistant_text" }
 	| { id?: string; type: "set_session_name"; name: string }
 	| { id?: string; type: "get_messages" }
-	| { id?: string; type: "get_commands" };
+	| { id?: string; type: "get_commands" }
+	| { id?: string; type: "get_auth_providers" }
+	| { id?: string; type: "auth_login"; providerId: string }
+	| { id?: string; type: "auth_set_api_key"; providerId: string; apiKey: string }
+	| { id?: string; type: "auth_login_input"; loginFlowId: string; value: string }
+	| { id?: string; type: "auth_login_cancel"; loginFlowId: string }
+	| { id?: string; type: "auth_logout"; providerId: string };
 
 /** RPC response types from pi */
 type RpcResponse =
 	| { id?: string; type: "response"; command: string; success: true; data?: unknown }
 	| { id?: string; type: "response"; command: string; success: false; error: string };
+
+/** Auth event types (sent during login flows) */
+type AuthEvent =
+	| { type: "auth_event"; loginFlowId: string; event: "url"; url: string; instructions?: string }
+	| { type: "auth_event"; loginFlowId: string; event: "prompt"; message: string; placeholder?: string }
+	| { type: "auth_event"; loginFlowId: string; event: "manual_input" }
+	| { type: "auth_event"; loginFlowId: string; event: "progress"; message: string }
+	| { type: "auth_event"; loginFlowId: string; event: "complete"; success: boolean; error?: string };
 
 /** Extension UI request types from pi */
 type RpcExtensionUIRequest =
@@ -131,6 +145,16 @@ export class WebChannel implements Channel {
 	/** Pending extension UI requests: Map<requestId, { sessionId, ws }> */
 	private pendingExtensionRequests = new Map<string, { sessionId: string; ws: ServerWebSocket<ConnectionData> }>();
 
+	/** Pending auth login flows: Map<loginFlowId, { ws, inputResolver, abortController }> */
+	private pendingLoginFlows = new Map<
+		string,
+		{
+			ws: ServerWebSocket<ConnectionData>;
+			inputResolver: ((value: string) => void) | null;
+			abortController: AbortController;
+		}
+	>();
+
 	constructor(options: WebChannelOptions) {
 		this.options = options;
 	}
@@ -149,11 +173,11 @@ export class WebChannel implements Channel {
 				// Validate auth token from Authorization header or URL query param
 				const authHeader = req.headers.get("Authorization");
 				const headerToken = authHeader?.replace(/^Bearer\s+/i, "");
-				
+
 				// Also check URL query param (for browser WebSocket clients that can't send headers)
 				const url = new URL(req.url, `http://${req.headers.get("host")}`);
 				const queryToken = url.searchParams.get("token");
-				
+
 				const token = headerToken || queryToken;
 
 				if (token !== this.options.authToken) {
@@ -277,6 +301,19 @@ export class WebChannel implements Channel {
 					success: true,
 					data: { sessionId: session.sessionId, cancelled },
 				});
+				return;
+			}
+
+			// Auth commands don't need a sessionId
+			if (
+				command.type === "get_auth_providers" ||
+				command.type === "auth_login" ||
+				command.type === "auth_set_api_key" ||
+				command.type === "auth_login_input" ||
+				command.type === "auth_login_cancel" ||
+				command.type === "auth_logout"
+			) {
+				await this.handleAuthCommand(ws, command, commandId);
 				return;
 			}
 
@@ -544,6 +581,258 @@ export class WebChannel implements Channel {
 				};
 			}
 		}
+	}
+
+	// ─── Auth command handling ─────────────────────────────────────────────────
+
+	private async handleAuthCommand(
+		ws: ServerWebSocket<ConnectionData>,
+		command: RpcCommand,
+		commandId?: string,
+	): Promise<void> {
+		const authStorage = AuthStorage.create(getAuthPath());
+
+		try {
+			switch (command.type) {
+				case "get_auth_providers": {
+					// Get OAuth providers from pi SDK
+					const oauthProviders = authStorage.getOAuthProviders();
+					const oauthIds = new Set(oauthProviders.map((p) => p.id));
+
+					// List of API key providers (filter out those that have OAuth)
+					const apiKeyProviders = [
+						{ id: "anthropic", name: "Anthropic" },
+						{ id: "openai", name: "OpenAI" },
+						{ id: "google", name: "Google (Gemini)" },
+						{ id: "xai", name: "xAI (Grok)" },
+						{ id: "groq", name: "Groq" },
+						{ id: "openrouter", name: "OpenRouter" },
+						{ id: "mistral", name: "Mistral" },
+					].filter((p) => !oauthIds.has(p.id));
+
+					// Combine both lists
+					const providers = [
+						...oauthProviders.map((p) => ({
+							id: p.id,
+							name: p.name,
+							type: "oauth" as const,
+							hasAuth: authStorage.hasAuth(p.id),
+							usesCallbackServer: p.usesCallbackServer ?? false,
+						})),
+						...apiKeyProviders.map((p) => ({
+							id: p.id,
+							name: p.name,
+							type: "apikey" as const,
+							hasAuth: authStorage.hasAuth(p.id),
+							usesCallbackServer: false,
+						})),
+					];
+
+					this.sendAuthResponse(ws, {
+						id: commandId,
+						type: "response",
+						command: "get_auth_providers",
+						success: true,
+						data: { providers },
+					});
+					break;
+				}
+
+				case "auth_login": {
+					const { providerId } = command;
+
+					// Check if there's already an active login flow for this connection
+					for (const [_flowId, flow] of this.pendingLoginFlows.entries()) {
+						if (flow.ws === ws) {
+							this.sendAuthResponse(ws, {
+								id: commandId,
+								type: "response",
+								command: "auth_login",
+								success: false,
+								error: "Another login flow is already in progress",
+							});
+							return;
+						}
+					}
+
+					const loginFlowId = crypto.randomUUID();
+					const abortController = new AbortController();
+
+					// Store the flow
+					this.pendingLoginFlows.set(loginFlowId, {
+						ws,
+						inputResolver: null,
+						abortController,
+					});
+
+					// Send initial response with flow ID
+					this.sendAuthResponse(ws, {
+						id: commandId,
+						type: "response",
+						command: "auth_login",
+						success: true,
+						data: { loginFlowId },
+					});
+
+					// Start the OAuth/login flow
+					try {
+						const callbacks: OAuthLoginCallbacks = {
+							onAuth: (info) => {
+								this.sendAuthEvent(ws, loginFlowId, {
+									type: "auth_event",
+									loginFlowId,
+									event: "url",
+									url: info.url,
+									instructions: info.instructions,
+								});
+							},
+							onPrompt: async (prompt) => {
+								// Send prompt event and wait for client response
+								return new Promise<string>((resolve) => {
+									const flow = this.pendingLoginFlows.get(loginFlowId);
+									if (flow) {
+										flow.inputResolver = resolve;
+										this.sendAuthEvent(ws, loginFlowId, {
+											type: "auth_event",
+											loginFlowId,
+											event: "prompt",
+											message: prompt.message,
+											placeholder: prompt.placeholder,
+										});
+									} else {
+										resolve(""); // Flow was cancelled
+									}
+								});
+							},
+							onProgress: (message) => {
+								this.sendAuthEvent(ws, loginFlowId, {
+									type: "auth_event",
+									loginFlowId,
+									event: "progress",
+									message,
+								});
+							},
+							onManualCodeInput: async () => {
+								// Show manual input UI and wait for client response
+								this.sendAuthEvent(ws, loginFlowId, {
+									type: "auth_event",
+									loginFlowId,
+									event: "manual_input",
+								});
+
+								return new Promise<string>((resolve) => {
+									const flow = this.pendingLoginFlows.get(loginFlowId);
+									if (flow) {
+										flow.inputResolver = resolve;
+									} else {
+										resolve(""); // Flow was cancelled
+									}
+								});
+							},
+							signal: abortController.signal,
+						};
+
+						await authStorage.login(providerId, callbacks);
+
+						// Success
+						this.sendAuthEvent(ws, loginFlowId, {
+							type: "auth_event",
+							loginFlowId,
+							event: "complete",
+							success: true,
+						});
+					} catch (err) {
+						// Error or cancelled
+						const isAborted = err instanceof Error && err.name === "AbortError";
+						this.sendAuthEvent(ws, loginFlowId, {
+							type: "auth_event",
+							loginFlowId,
+							event: "complete",
+							success: false,
+							error: isAborted ? "Login cancelled" : err instanceof Error ? err.message : String(err),
+						});
+					} finally {
+						// Clean up
+						this.pendingLoginFlows.delete(loginFlowId);
+					}
+					break;
+				}
+
+				case "auth_set_api_key": {
+					const { providerId, apiKey } = command;
+					authStorage.set(providerId, { type: "api_key", key: apiKey });
+
+					this.sendAuthResponse(ws, {
+						id: commandId,
+						type: "response",
+						command: "auth_set_api_key",
+						success: true,
+					});
+					break;
+				}
+
+				case "auth_login_input": {
+					const { loginFlowId, value } = command;
+					const flow = this.pendingLoginFlows.get(loginFlowId);
+
+					if (flow?.inputResolver) {
+						flow.inputResolver(value);
+						flow.inputResolver = null;
+					}
+					// No response needed — this is fire-and-forget
+					break;
+				}
+
+				case "auth_login_cancel": {
+					const { loginFlowId } = command;
+					const flow = this.pendingLoginFlows.get(loginFlowId);
+
+					if (flow) {
+						flow.abortController.abort();
+						this.pendingLoginFlows.delete(loginFlowId);
+					}
+					// No response needed
+					break;
+				}
+
+				case "auth_logout": {
+					const { providerId } = command;
+					authStorage.logout(providerId);
+
+					this.sendAuthResponse(ws, {
+						id: commandId,
+						type: "response",
+						command: "auth_logout",
+						success: true,
+					});
+					break;
+				}
+			}
+		} catch (err) {
+			this.sendAuthResponse(ws, {
+				id: commandId,
+				type: "response",
+				command: command.type,
+				success: false,
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
+
+	private sendAuthEvent(ws: ServerWebSocket<ConnectionData>, _loginFlowId: string, event: AuthEvent): void {
+		const message: OutboundWebMessage = {
+			sessionId: "_auth",
+			event,
+		};
+		ws.send(JSON.stringify(message));
+	}
+
+	private sendAuthResponse(ws: ServerWebSocket<ConnectionData>, response: RpcResponse): void {
+		const message: OutboundWebMessage = {
+			sessionId: "_auth",
+			event: response,
+		};
+		ws.send(JSON.stringify(message));
 	}
 
 	// ─── Session subscription ──────────────────────────────────────────────────
