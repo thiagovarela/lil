@@ -15,14 +15,12 @@ import {
   setCompacting,
 } from "@/stores/session";
 import {
-  addUserMessage,
   startAssistantMessage,
   appendStreamToken,
   endAssistantMessage,
   startThinking,
   appendThinkingToken,
   endThinking,
-  setMessages,
 } from "@/stores/messages";
 
 class ClientManager {
@@ -73,36 +71,17 @@ class ClientManager {
       return;
     }
 
-    // Handle agent session events
+    // Handle agent session events (pi-agent-core event protocol)
     switch (event.type) {
+      // ─── Session events ────────────────────────────────────────────────
       case "session_start":
-        setSessionId(event.sessionId);
+        // Use the wrapper sessionId (matches the server's this.sessions key),
+        // NOT event.sessionId which is the pi agent's internal ID and may differ.
+        setSessionId(sessionId);
         break;
 
-      case "stream_start":
-        startAssistantMessage();
-        setStreaming(true);
-        break;
-
-      case "stream_token":
-        appendStreamToken(event.accumulated);
-        break;
-
-      case "stream_end":
-        endAssistantMessage();
-        setStreaming(false);
-        break;
-
-      case "thinking_start":
-        startThinking();
-        break;
-
-      case "thinking_token":
-        appendThinkingToken(event.accumulated);
-        break;
-
-      case "thinking_end":
-        endThinking();
+      case "session_name_changed":
+        setSessionName(event.name);
         break;
 
       case "model_changed":
@@ -113,33 +92,97 @@ class ClientManager {
         setThinkingLevel(event.level);
         break;
 
-      case "session_name_changed":
-        setSessionName(event.name);
-        break;
-
-      case "compact_start":
-        setCompacting(true);
-        break;
-
-      case "compact_end":
-        setCompacting(false);
-        break;
-
       case "state_update":
         updateSessionState(event.state);
         break;
 
+      // ─── Agent lifecycle ───────────────────────────────────────────────
+      case "agent_start":
+        setStreaming(true);
+        break;
+
+      case "agent_end":
+        setStreaming(false);
+        break;
+
+      // ─── Message streaming ─────────────────────────────────────────────
+      case "message_start":
+        if (event.message?.role === "assistant") {
+          startAssistantMessage();
+        }
+        break;
+
+      case "message_update": {
+        const ame = event.assistantMessageEvent;
+        if (!ame) break;
+
+        switch (ame.type) {
+          case "text_delta":
+            // Use the accumulated text from the partial assistant message
+            appendStreamToken(
+              ame.partial?.content
+                ?.filter((c: any) => c.type === "text")
+                .map((c: any) => c.text)
+                .join("") ?? ""
+            );
+            break;
+
+          case "thinking_start":
+            startThinking();
+            break;
+
+          case "thinking_delta":
+            appendThinkingToken(
+              ame.partial?.content
+                ?.filter((c: any) => c.type === "thinking")
+                .map((c: any) => c.thinking)
+                .join("") ?? ""
+            );
+            break;
+
+          case "thinking_end":
+            endThinking();
+            break;
+        }
+        break;
+      }
+
+      case "message_end":
+        if (event.message?.role === "assistant") {
+          endAssistantMessage();
+        }
+        break;
+
+      // ─── Turn lifecycle ────────────────────────────────────────────────
+      case "turn_start":
+      case "turn_end":
+        break;
+
+      // ─── Tool execution ────────────────────────────────────────────────
+      case "tool_execution_start":
+        console.log("[client-manager] Tool execution:", event.toolName);
+        break;
+
+      case "tool_execution_update":
+        break;
+
+      case "tool_execution_end":
+        break;
+
+      // ─── Compaction ────────────────────────────────────────────────────
+      case "compact_start":
+      case "auto_compaction_start":
+        setCompacting(true);
+        break;
+
+      case "compact_end":
+      case "auto_compaction_end":
+        setCompacting(false);
+        break;
+
+      // ─── Errors ────────────────────────────────────────────────────────
       case "error":
         console.error("[client-manager] Agent error:", event.error);
-        // Could show a toast notification here
-        break;
-
-      case "tool_use_start":
-        console.log("[client-manager] Tool use:", event.toolName);
-        break;
-
-      case "tool_result":
-        console.log("[client-manager] Tool result:", event.result.slice(0, 100));
         break;
 
       default:

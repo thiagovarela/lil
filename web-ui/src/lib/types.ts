@@ -93,27 +93,52 @@ export interface ModelInfo {
   supportsPromptCache?: boolean;
 }
 
+// ─── Assistant message sub-events (nested in message_update) ──────────────────
+
+export type AssistantMessageEvent =
+  | { type: "start"; partial: any }
+  | { type: "text_start"; contentIndex: number; partial: any }
+  | { type: "text_delta"; contentIndex: number; delta: string; partial: any }
+  | { type: "text_end"; contentIndex: number; content: string; partial: any }
+  | { type: "thinking_start"; contentIndex: number; partial: any }
+  | { type: "thinking_delta"; contentIndex: number; delta: string; partial: any }
+  | { type: "thinking_end"; contentIndex: number; content: string; partial: any }
+  | { type: "toolcall_start"; contentIndex: number; partial: any }
+  | { type: "toolcall_delta"; contentIndex: number; delta: string; partial: any }
+  | { type: "toolcall_end"; contentIndex: number; toolCall: any; partial: any }
+  | { type: "done"; reason: string; message: any }
+  | { type: "error"; reason: string; error: any };
+
+// ─── Agent events (pi-agent-core protocol) ────────────────────────────────────
+
 export type AgentSessionEvent =
+  // Session-level events
   | { type: "session_start"; sessionId: string }
-  | { type: "prompt_start" }
-  | { type: "prompt_end" }
-  | { type: "stream_start" }
-  | { type: "stream_token"; text: string; accumulated: string }
-  | { type: "stream_end" }
-  | { type: "thinking_start"; level: ThinkingLevel }
-  | { type: "thinking_token"; text: string; accumulated: string }
-  | { type: "thinking_end" }
-  | { type: "tool_use_start"; toolName: string; toolUseId: string }
-  | { type: "tool_use_input_delta"; toolUseId: string; delta: string }
-  | { type: "tool_use_end"; toolUseId: string }
-  | { type: "tool_result"; toolUseId: string; result: string; isError: boolean }
-  | { type: "compact_start" }
-  | { type: "compact_end"; originalCount: number; compactedCount: number }
   | { type: "model_changed"; model: ModelInfo }
   | { type: "thinking_level_changed"; level: ThinkingLevel }
   | { type: "session_name_changed"; name: string }
-  | { type: "error"; error: string }
-  | { type: "state_update"; state: SessionState };
+  | { type: "state_update"; state: SessionState }
+  // Agent lifecycle
+  | { type: "agent_start" }
+  | { type: "agent_end"; messages: any[] }
+  // Turn lifecycle
+  | { type: "turn_start" }
+  | { type: "turn_end"; message: any; toolResults: any[] }
+  // Message streaming
+  | { type: "message_start"; message: any }
+  | { type: "message_update"; message: any; assistantMessageEvent: AssistantMessageEvent }
+  | { type: "message_end"; message: any }
+  // Tool execution
+  | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
+  | { type: "tool_execution_update"; toolCallId: string; toolName: string; args: any; partialResult: any }
+  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: any; isError: boolean }
+  // Compaction
+  | { type: "compact_start" }
+  | { type: "compact_end"; originalCount: number; compactedCount: number }
+  | { type: "auto_compaction_start"; reason: string }
+  | { type: "auto_compaction_end"; result: any; aborted: boolean; willRetry: boolean; errorMessage?: string }
+  // Error
+  | { type: "error"; error: string };
 
 export interface SessionState {
   model: ModelInfo;

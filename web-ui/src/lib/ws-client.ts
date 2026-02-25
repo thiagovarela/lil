@@ -41,12 +41,10 @@ export class WebSocketClient {
 
     try {
       // Browser WebSocket API doesn't support custom headers (like Authorization)
-      // We need to pass the auth token via URL
-      // TODO: Update clankie's WebChannel to support token in URL query param as alternative
-      // For now, we'll send it as a header via a proxy or accept the limitation
+      // Pass the auth token via URL query parameter instead
       const url = new URL(this.options.url);
-      // Store token for potential future use in protocol messages
-      this.ws = new WebSocket(this.options.url);
+      url.searchParams.set("token", this.options.authToken);
+      this.ws = new WebSocket(url.toString());
 
       this.ws.onopen = () => {
         this.reconnectAttempt = 0;

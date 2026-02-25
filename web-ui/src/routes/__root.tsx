@@ -1,8 +1,11 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { useEffect } from 'react'
 import { MessageSquare, Settings } from 'lucide-react'
 import { ConnectionStatus } from '@/components/connection-status'
+import { connectionStore } from '@/stores/connection'
+import { clientManager } from '@/lib/client-manager'
 
 import appCss from '../styles.css?url'
 
@@ -32,6 +35,14 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
+  // Auto-connect on startup if saved credentials exist
+  useEffect(() => {
+    const { settings } = connectionStore.state;
+    if (settings.authToken && !clientManager.isConnected()) {
+      clientManager.connect();
+    }
+  }, []);
+
   return (
     <RootDocument>
       <div className="flex h-screen flex-col">

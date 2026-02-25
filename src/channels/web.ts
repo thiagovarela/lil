@@ -146,9 +146,15 @@ export class WebChannel implements Channel {
 				close: (ws) => this.handleClose(ws),
 			},
 			fetch: (req, server) => {
-				// Validate auth token from Authorization header
+				// Validate auth token from Authorization header or URL query param
 				const authHeader = req.headers.get("Authorization");
-				const token = authHeader?.replace(/^Bearer\s+/i, "");
+				const headerToken = authHeader?.replace(/^Bearer\s+/i, "");
+				
+				// Also check URL query param (for browser WebSocket clients that can't send headers)
+				const url = new URL(req.url, `http://${req.headers.get("host")}`);
+				const queryToken = url.searchParams.get("token");
+				
+				const token = headerToken || queryToken;
 
 				if (token !== this.options.authToken) {
 					return new Response("Unauthorized", { status: 401 });
@@ -260,7 +266,8 @@ export class WebChannel implements Channel {
 				const options = command.parentSession ? { parentSession: command.parentSession } : undefined;
 				const cancelled = !(await session.newSession(options));
 
-				// Subscribe to session events
+				// Subscribe AFTER newSession() — sessionId changes during newSession(),
+				// so we must use the final ID for tracking in this.sessions
 				this.subscribeToSession(session, ws);
 
 				this.sendResponse(ws, session.sessionId, {
@@ -275,7 +282,7 @@ export class WebChannel implements Channel {
 
 			// All other commands require sessionId
 			if (!inbound.sessionId) {
-				this.sendError(ws, undefined, command.type, "sessionId is required");
+				this.sendError(ws, undefined, command.type, "sessionId is required", commandId);
 				return;
 			}
 
@@ -286,7 +293,7 @@ export class WebChannel implements Channel {
 			if (!session) {
 				// Try to restore session from disk
 				// For now, return error - client should use new_session first
-				this.sendError(ws, sessionId, command.type, `Session not found: ${sessionId}`);
+				this.sendError(ws, sessionId, command.type, `Session not found: ${sessionId}`, commandId);
 				return;
 			}
 
@@ -295,7 +302,7 @@ export class WebChannel implements Channel {
 			this.sendResponse(ws, sessionId, response);
 		} catch (err) {
 			console.error("[web] Command error:", err);
-			this.sendError(ws, inbound.sessionId, command.type, err instanceof Error ? err.message : String(err));
+			this.sendError(ws, inbound.sessionId, command.type, err instanceof Error ? err.message : String(err), commandId);
 		}
 	}
 
@@ -621,8 +628,10 @@ export class WebChannel implements Channel {
 		sessionId: string | undefined,
 		command: string,
 		error: string,
+		commandId?: string,
 	): void {
 		const response: RpcResponse = {
+			id: commandId,
 			type: "response",
 			command,
 			success: false,

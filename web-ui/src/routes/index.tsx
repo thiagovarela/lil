@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ChatMessages } from "@/components/chat-messages";
 import { ChatInput } from "@/components/chat-input";
 import { connectionStore } from "@/stores/connection";
-import { sessionStore } from "@/stores/session";
+import { sessionStore, setSessionId } from "@/stores/session";
 import { clientManager } from "@/lib/client-manager";
 
 export const Route = createFileRoute("/")({
@@ -35,7 +35,12 @@ function ChatPage() {
       if (client) {
         client
           .newSession()
-          .then(() => {
+          .then((result) => {
+            // The RPC response is the authoritative source for sessionId —
+            // it matches the key the server uses in this.sessions.
+            if (result?.sessionId) {
+              setSessionId(result.sessionId);
+            }
             setIsCreatingSession(false);
           })
           .catch((err) => {
