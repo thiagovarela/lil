@@ -43,6 +43,9 @@ export type RpcCommand =
 	| { id?: string; type: "set_session_name"; name: string }
 	| { id?: string; type: "get_messages" }
 	| { id?: string; type: "get_commands" }
+	| { id?: string; type: "get_extensions" }
+	| { id?: string; type: "get_skills" }
+	| { id?: string; type: "install_package"; source: string; local?: boolean }
 	| { id?: string; type: "get_auth_providers" }
 	| { id?: string; type: "auth_login"; providerId: string }
 	| { id?: string; type: "auth_set_api_key"; providerId: string; apiKey: string }
@@ -182,6 +185,37 @@ export type AuthEvent =
 	| { type: "auth_event"; loginFlowId: string; event: "manual_input" }
 	| { type: "auth_event"; loginFlowId: string; event: "progress"; message: string }
 	| { type: "auth_event"; loginFlowId: string; event: "complete"; success: boolean; error?: string };
+
+// ─── Extensions & Skills ───────────────────────────────────────────────────────
+
+export interface ExtensionInfo {
+	path: string;
+	resolvedPath: string;
+	tools: string[];
+	commands: string[];
+	flags: string[];
+	shortcuts: string[];
+}
+
+export interface ExtensionError {
+	path: string;
+	error: string;
+}
+
+export interface SkillInfo {
+	name: string;
+	description: string;
+	filePath: string;
+	baseDir: string;
+	source: string;
+	disableModelInvocation: boolean;
+}
+
+export interface SkillDiagnostic {
+	type: string;
+	message: string;
+	path?: string;
+}
 
 // ─── WebSocket Message Wrapper ─────────────────────────────────────────────────
 

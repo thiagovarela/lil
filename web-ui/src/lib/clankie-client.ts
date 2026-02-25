@@ -171,6 +171,67 @@ export class ClankieClient {
 		await this.sendCommand({ type: "auth_logout", providerId });
 	}
 
+	// ─── Extensions & Skills ───────────────────────────────────────────────────
+
+	async getExtensions(sessionId: string): Promise<{
+		extensions: Array<{
+			path: string;
+			resolvedPath: string;
+			tools: string[];
+			commands: string[];
+			flags: string[];
+			shortcuts: string[];
+		}>;
+		errors: Array<{ path: string; error: string }>;
+	}> {
+		const response = await this.sendCommand({ type: "get_extensions" }, sessionId);
+		return response as {
+			extensions: Array<{
+				path: string;
+				resolvedPath: string;
+				tools: string[];
+				commands: string[];
+				flags: string[];
+				shortcuts: string[];
+			}>;
+			errors: Array<{ path: string; error: string }>;
+		};
+	}
+
+	async getSkills(sessionId: string): Promise<{
+		skills: Array<{
+			name: string;
+			description: string;
+			filePath: string;
+			baseDir: string;
+			source: string;
+			disableModelInvocation: boolean;
+		}>;
+		diagnostics: Array<{ type: string; message: string; path?: string }>;
+	}> {
+		const response = await this.sendCommand({ type: "get_skills" }, sessionId);
+		return response as {
+			skills: Array<{
+				name: string;
+				description: string;
+				filePath: string;
+				baseDir: string;
+				source: string;
+				disableModelInvocation: boolean;
+			}>;
+			diagnostics: Array<{ type: string; message: string; path?: string }>;
+		};
+	}
+
+	async installPackage(
+		sessionId: string,
+		source: string,
+		local?: boolean,
+	): Promise<{ output: string; exitCode: number }> {
+		const response = await this.sendCommand({ type: "install_package", source, local }, sessionId);
+		return response as { output: string; exitCode: number };
+	}
+
 	// ─── Internal ──────────────────────────────────────────────────────────────
 
 	private handleMessage(message: OutboundWebMessage | RpcResponse): void {
