@@ -10,7 +10,7 @@
  */
 
 import * as crypto from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { ImageContent, OAuthLoginCallbacks } from "@mariozechner/pi-ai";
@@ -74,6 +74,9 @@ type RpcCommand =
 	| { id?: string; type: "set_session_name"; name: string }
 	| { id?: string; type: "get_messages" }
 	| { id?: string; type: "get_commands" }
+	| { id?: string; type: "get_extensions" }
+	| { id?: string; type: "get_skills" }
+	| { id?: string; type: "install_package"; source: string; local?: boolean }
 	| { id?: string; type: "get_auth_providers" }
 	| { id?: string; type: "auth_login"; providerId: string }
 	| { id?: string; type: "auth_set_api_key"; providerId: string; apiKey: string }
@@ -593,6 +596,98 @@ export class WebChannel implements Channel {
 				return { id, type: "response", command: "get_commands", success: true, data: { commands } };
 			}
 
+			case "get_extensions": {
+				const extensionsResult = session.resourceLoader.getExtensions();
+				const extensions = extensionsResult.extensions.map((ext) => ({
+					path: ext.path,
+					resolvedPath: ext.resolvedPath,
+					tools: Array.from(ext.tools.keys()),
+					commands: Array.from(ext.commands.keys()),
+					flags: Array.from(ext.flags.keys()),
+					shortcuts: Array.from(ext.shortcuts.keys()),
+				}));
+
+				return {
+					id,
+					type: "response",
+					command: "get_extensions",
+					success: true,
+					data: {
+						extensions,
+						errors: extensionsResult.errors,
+					},
+				};
+			}
+
+			case "get_skills": {
+				const skillsResult = session.resourceLoader.getSkills();
+				const skills = skillsResult.skills.map((skill) => ({
+					name: skill.name,
+					description: skill.description,
+					filePath: skill.filePath,
+					baseDir: skill.baseDir,
+					source: skill.source,
+					disableModelInvocation: skill.disableModelInvocation,
+				}));
+
+				return {
+					id,
+					type: "response",
+					command: "get_skills",
+					success: true,
+					data: {
+						skills,
+						diagnostics: skillsResult.diagnostics,
+					},
+				};
+			}
+
+			case "install_package": {
+				const { source, local } = command;
+				const installCommand = `pi install ${local ? "-l " : ""}${source}`;
+
+				try {
+					// Run pi install via bash
+					const result = await session.executeBash(installCommand);
+
+					if (result.exitCode === 0) {
+						// Successful install - reload the session to pick up new extensions/skills
+						await session.reload();
+
+						return {
+							id,
+							type: "response",
+							command: "install_package",
+							success: true,
+							data: {
+								output: result.output,
+								exitCode: result.exitCode,
+							},
+						};
+					}
+
+					// Non-zero exit code - return as success but with exitCode info
+					return {
+						id,
+						type: "response",
+						command: "install_package",
+						success: true,
+						data: {
+							output: result.output,
+							exitCode: result.exitCode,
+						},
+					};
+				} catch (err) {
+					return {
+						id,
+						type: "response",
+						command: "install_package",
+						success: false,
+						error: err instanceof Error ? err.message : String(err),
+					};
+				}
+			}
+
 			default: {
 				// biome-ignore lint/suspicious/noExplicitAny: Need to access .type property on unknown command
 				const unknownCommand = command as any;
@@ -961,10 +1056,7 @@ export class WebChannel implements Channel {
 							break;
 						}
 					}
-				} catch {
-					// Skip invalid JSON lines
-					continue;
-				}
+				} catch {}
 			}
 
 			return lastUserMessage;
@@ -973,9 +1065,7 @@ export class WebChannel implements Channel {
 		}
 	}
 
-	private async listAllSessions(): Promise<
-		Array<{ sessionId: string; title?: string; messageCount: number }>
-	> {
+	private async listAllSessions(): Promise<Array<{ sessionId: string; title?: string; messageCount: number }>> {
 		const sessions: Array<{ sessionId: string; title?: string; messageCount: number }> = [];
 		const sessionsDir = join(getAppDir(), "sessions");
 
@@ -1014,10 +1104,8 @@ export class WebChannel implements Channel {
 				if (inMemorySession) {
 					// Use in-memory session data
 					// Get the last user message as the title (like pi's /resume command)
-					const lastUserMessage = [...inMemorySession.messages]
-						.reverse()
-						.find((msg) => msg.role === "user");
-					
+					const lastUserMessage = [...inMemorySession.messages].reverse().find((msg) => msg.role === "user");
+
 					let title: string | undefined;
 					if (lastUserMessage) {
 						// Extract text from content
@@ -1031,7 +1119,7 @@ export class WebChannel implements Channel {
 							title = textContent?.substring(0, 100) || inMemorySession.sessionName;
 						}
 					}
-					
+
 					if (!title) {
 						title = inMemorySession.sessionName;
 					}
@@ -1044,7 +1132,7 @@ export class WebChannel implements Channel {
 				} else {
 					// For sessions not in memory, read title from disk
 					const title = this.getSessionTitleFromDisk(path);
-					
+
 					sessions.push({
 						sessionId,
 						title,

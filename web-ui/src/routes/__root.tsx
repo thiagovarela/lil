@@ -1,5 +1,5 @@
 import { createRootRoute, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
-import { MessageSquare, Settings } from "lucide-react";
+import { MessageSquare, Puzzle, Settings } from "lucide-react";
 import { useEffect } from "react";
 import { ConnectionStatus } from "@/components/connection-status";
 import { clientManager } from "@/lib/client-manager";
@@ -55,6 +55,13 @@ function RootComponent() {
 							>
 								<MessageSquare className="h-4 w-4" />
 								Chat
+							</Link>
+							<Link
+								to="/extensions"
+								className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
+							>
+								<Puzzle className="h-4 w-4" />
+								Extensions & Skills
 							</Link>
 							<Link
 								to="/settings"

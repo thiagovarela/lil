@@ -91,7 +91,7 @@ class ClientManager {
 
 			// Try to restore the last active session from localStorage
 			const savedSessionId = localStorage.getItem("clankie-last-session-id");
-			
+
 			if (savedSessionId) {
 				console.log(`[client-manager] Attempting to restore session: ${savedSessionId}`);
 				try {
@@ -400,12 +400,10 @@ class ClientManager {
 
 			// Add to sessions list if not already there
 			const { sessions } = sessionsListStore.state;
-			if (!sessions.some(s => s.sessionId === sessionId)) {
+			if (!sessions.some((s) => s.sessionId === sessionId)) {
 				// Get the last user message as the title
-				const lastUserMessage = [...messages]
-					.reverse()
-					.find((msg) => msg.role === "user");
-				
+				const lastUserMessage = [...messages].reverse().find((msg) => msg.role === "user");
+
 				let title: string | undefined;
 				if (lastUserMessage) {
 					const textContent = lastUserMessage.content
