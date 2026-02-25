@@ -1,13 +1,19 @@
-import { HeadContent, Link, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
+import {
+  HeadContent,
+  Link,
+  Outlet,
+  Scripts,
+  createRootRoute,
+} from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { useEffect } from 'react'
 import { MessageSquare, Settings } from 'lucide-react'
+import appCss from '../styles.css?url'
 import { ConnectionStatus } from '@/components/connection-status'
 import { connectionStore } from '@/stores/connection'
 import { clientManager } from '@/lib/client-manager'
 
-import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
   head: () => ({
@@ -37,11 +43,11 @@ export const Route = createRootRoute({
 function RootComponent() {
   // Auto-connect on startup if saved credentials exist
   useEffect(() => {
-    const { settings } = connectionStore.state;
+    const { settings } = connectionStore.state
     if (settings.authToken && !clientManager.isConnected()) {
-      clientManager.connect();
+      clientManager.connect()
     }
-  }, []);
+  }, [])
 
   return (
     <RootDocument>
@@ -49,7 +55,7 @@ function RootComponent() {
         <header className="border-b border-border bg-card">
           <div className="flex h-14 items-center gap-4 px-4">
             <h1 className="text-lg font-semibold">clankie</h1>
-            
+
             <nav className="flex gap-2">
               <Link
                 to="/"

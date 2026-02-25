@@ -2,41 +2,51 @@
  * Client manager — singleton that manages the clankie client and updates stores.
  */
 
-import { ClankieClient } from "./clankie-client";
-import type { AgentSessionEvent, RpcResponse } from "./types";
-import { updateConnectionStatus, connectionStore } from "@/stores/connection";
+import { ClankieClient } from './clankie-client'
+import type { AgentSessionEvent, RpcResponse } from './types'
+import { connectionStore, updateConnectionStatus } from '@/stores/connection'
 import {
-  setSessionId,
-  updateSessionState,
+  resetSession,
+  setCompacting,
   setModel,
-  setThinkingLevel,
+  setSessionId,
   setSessionName,
   setStreaming,
-  setCompacting,
-} from "@/stores/session";
+  setThinkingLevel,
+  updateSessionState,
+} from '@/stores/session'
 import {
-  startAssistantMessage,
   appendStreamToken,
-  endAssistantMessage,
-  startThinking,
   appendThinkingToken,
+  clearMessages,
+  endAssistantMessage,
   endThinking,
-} from "@/stores/messages";
+  setMessages,
+  startAssistantMessage,
+  startThinking,
+} from '@/stores/messages'
+import {
+  addSession,
+  clearSessions,
+  sessionsListStore,
+  setActiveSession,
+  updateSessionMeta,
+} from '@/stores/sessions-list'
 
 class ClientManager {
-  private client: ClankieClient | null = null;
+  private client: ClankieClient | null = null
 
   connect(): void {
     if (this.client) {
-      console.warn("Client already connected");
-      return;
+      console.warn('Client already connected')
+      return
     }
 
-    const { settings } = connectionStore.state;
-    
+    const { settings } = connectionStore.state
+
     if (!settings.authToken) {
-      updateConnectionStatus("error", "Auth token is required");
-      return;
+      updateConnectionStatus('error', 'Auth token is required')
+      return
     }
 
     this.client = new ClankieClient({
@@ -44,151 +54,263 @@ class ClientManager {
       authToken: settings.authToken,
       onEvent: (sessionId, event) => this.handleEvent(sessionId, event),
       onStateChange: (state, error) => updateConnectionStatus(state, error),
-    });
+    })
 
-    this.client.connect();
+    this.client.connect()
   }
 
   disconnect(): void {
     if (this.client) {
-      this.client.disconnect();
-      this.client = null;
+      this.client.disconnect()
+      this.client = null
     }
+    // Clear sessions list on disconnect
+    clearSessions()
+    resetSession()
+    clearMessages()
   }
 
   getClient(): ClankieClient | null {
-    return this.client;
+    return this.client
   }
 
   isConnected(): boolean {
-    return this.client?.getConnectionState() === "connected";
+    return this.client?.getConnectionState() === 'connected'
   }
 
-  private handleEvent(sessionId: string, event: AgentSessionEvent | RpcResponse): void {
+  private handleEvent(
+    sessionId: string,
+    event: AgentSessionEvent | RpcResponse,
+  ): void {
     // Handle RPC responses (shouldn't normally reach here as they're handled by promises)
-    if (event.type === "response") {
-      console.log("[client-manager] RPC response:", event);
-      return;
+    if (event.type === 'response') {
+      console.log('[client-manager] RPC response:', event)
+      return
     }
+
+    const { activeSessionId } = sessionsListStore.state
+    const isActiveSession = sessionId === activeSessionId
 
     // Handle agent session events (pi-agent-core event protocol)
     switch (event.type) {
       // ─── Session events ────────────────────────────────────────────────
-      case "session_start":
-        // Use the wrapper sessionId (matches the server's this.sessions key),
-        // NOT event.sessionId which is the pi agent's internal ID and may differ.
-        setSessionId(sessionId);
-        break;
+      case 'session_start':
+        // Add new session to the list
+        addSession({
+          sessionId,
+          name: undefined,
+          model: undefined,
+          messageCount: 0,
+          createdAt: Date.now(),
+        })
 
-      case "session_name_changed":
-        setSessionName(event.name);
-        break;
+        // Set as active and update single-session store only if it's the active one
+        if (isActiveSession) {
+          setSessionId(sessionId)
+        }
+        break
 
-      case "model_changed":
-        setModel(event.model);
-        break;
+      case 'session_name_changed':
+        // Update session list metadata for any session
+        updateSessionMeta(sessionId, { name: event.name })
 
-      case "thinking_level_changed":
-        setThinkingLevel(event.level);
-        break;
+        // Update single-session store only if active
+        if (isActiveSession) {
+          setSessionName(event.name)
+        }
+        break
 
-      case "state_update":
-        updateSessionState(event.state);
-        break;
+      case 'model_changed':
+        // Update session list metadata for any session
+        updateSessionMeta(sessionId, { model: event.model })
+
+        // Update single-session store only if active
+        if (isActiveSession) {
+          setModel(event.model)
+        }
+        break
+
+      case 'thinking_level_changed':
+        if (isActiveSession) {
+          setThinkingLevel(event.level)
+        }
+        break
+
+      case 'state_update':
+        // Update message count in session list
+        updateSessionMeta(sessionId, {
+          messageCount: event.state.messageCount,
+        })
+
+        if (isActiveSession) {
+          updateSessionState(event.state)
+        }
+        break
 
       // ─── Agent lifecycle ───────────────────────────────────────────────
-      case "agent_start":
-        setStreaming(true);
-        break;
+      case 'agent_start':
+        if (isActiveSession) {
+          setStreaming(true)
+        }
+        break
 
-      case "agent_end":
-        setStreaming(false);
-        break;
+      case 'agent_end':
+        if (isActiveSession) {
+          setStreaming(false)
+        }
+        break
 
       // ─── Message streaming ─────────────────────────────────────────────
-      case "message_start":
-        if (event.message?.role === "assistant") {
-          startAssistantMessage();
+      case 'message_start':
+        if (isActiveSession && event.message?.role === 'assistant') {
+          startAssistantMessage()
         }
-        break;
+        break
 
-      case "message_update": {
-        const ame = event.assistantMessageEvent;
-        if (!ame) break;
+      case 'message_update': {
+        if (!isActiveSession) break
+
+        const ame = event.assistantMessageEvent
 
         switch (ame.type) {
-          case "text_delta":
+          case 'text_delta':
             // Use the accumulated text from the partial assistant message
             appendStreamToken(
               ame.partial?.content
-                ?.filter((c: any) => c.type === "text")
+                ?.filter((c: any) => c.type === 'text')
                 .map((c: any) => c.text)
-                .join("") ?? ""
-            );
-            break;
+                .join('') ?? '',
+            )
+            break
 
-          case "thinking_start":
-            startThinking();
-            break;
+          case 'thinking_start':
+            startThinking()
+            break
 
-          case "thinking_delta":
+          case 'thinking_delta':
             appendThinkingToken(
               ame.partial?.content
-                ?.filter((c: any) => c.type === "thinking")
+                ?.filter((c: any) => c.type === 'thinking')
                 .map((c: any) => c.thinking)
-                .join("") ?? ""
-            );
-            break;
+                .join('') ?? '',
+            )
+            break
 
-          case "thinking_end":
-            endThinking();
-            break;
+          case 'thinking_end':
+            endThinking()
+            break
         }
-        break;
+        break
       }
 
-      case "message_end":
-        if (event.message?.role === "assistant") {
-          endAssistantMessage();
+      case 'message_end':
+        if (isActiveSession && event.message?.role === 'assistant') {
+          endAssistantMessage()
         }
-        break;
+        break
 
       // ─── Turn lifecycle ────────────────────────────────────────────────
-      case "turn_start":
-      case "turn_end":
-        break;
+      case 'turn_start':
+      case 'turn_end':
+        break
 
       // ─── Tool execution ────────────────────────────────────────────────
-      case "tool_execution_start":
-        console.log("[client-manager] Tool execution:", event.toolName);
-        break;
+      case 'tool_execution_start':
+        if (isActiveSession) {
+          console.log('[client-manager] Tool execution:', event.toolName)
+        }
+        break
 
-      case "tool_execution_update":
-        break;
+      case 'tool_execution_update':
+        break
 
-      case "tool_execution_end":
-        break;
+      case 'tool_execution_end':
+        break
 
       // ─── Compaction ────────────────────────────────────────────────────
-      case "compact_start":
-      case "auto_compaction_start":
-        setCompacting(true);
-        break;
+      case 'compact_start':
+      case 'auto_compaction_start':
+        if (isActiveSession) {
+          setCompacting(true)
+        }
+        break
 
-      case "compact_end":
-      case "auto_compaction_end":
-        setCompacting(false);
-        break;
+      case 'compact_end':
+      case 'auto_compaction_end':
+        if (isActiveSession) {
+          setCompacting(false)
+        }
+        break
 
       // ─── Errors ────────────────────────────────────────────────────────
-      case "error":
-        console.error("[client-manager] Agent error:", event.error);
-        break;
+      case 'error':
+        console.error('[client-manager] Agent error:', event.error)
+        break
 
       default:
-        console.log("[client-manager] Unhandled event:", event);
+        console.log('[client-manager] Unhandled event:', event)
+    }
+  }
+
+  // ─── Session management ────────────────────────────────────────────────────
+
+  async createNewSession(): Promise<string | null> {
+    if (!this.client) {
+      console.error('[client-manager] Cannot create session: not connected')
+      return null
+    }
+
+    try {
+      const result = await this.client.newSession()
+      if (result.cancelled) {
+        console.log('[client-manager] Session creation cancelled')
+        return null
+      }
+
+      // Session will be added to the list via session_start event
+      // Set it as active
+      setActiveSession(result.sessionId)
+
+      // Clear messages for the new session
+      clearMessages()
+
+      return result.sessionId
+    } catch (err) {
+      console.error('[client-manager] Failed to create session:', err)
+      return null
+    }
+  }
+
+  async switchSession(sessionId: string): Promise<void> {
+    if (!this.client) {
+      console.error('[client-manager] Cannot switch session: not connected')
+      return
+    }
+
+    try {
+      // Set as active session
+      setActiveSession(sessionId)
+
+      // Clear current messages
+      clearMessages()
+
+      // Fetch messages for the new session
+      const { messages } = await this.client.getMessages(sessionId)
+      setMessages(messages)
+
+      // Fetch and update session state
+      const state = await this.client.getState(sessionId)
+      setSessionId(sessionId)
+      setModel(state.model)
+      setThinkingLevel(state.thinkingLevel)
+      setSessionName(state.sessionName)
+      updateSessionState(state)
+
+      console.log(`[client-manager] Switched to session ${sessionId}`)
+    } catch (err) {
+      console.error('[client-manager] Failed to switch session:', err)
     }
   }
 }
 
-export const clientManager = new ClientManager();
+export const clientManager = new ClientManager()

@@ -1,55 +1,51 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useStore } from "@tanstack/react-store";
-import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { Settings } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ChatMessages } from "@/components/chat-messages";
-import { ChatInput } from "@/components/chat-input";
-import { connectionStore } from "@/stores/connection";
-import { sessionStore, setSessionId } from "@/stores/session";
-import { clientManager } from "@/lib/client-manager";
+import { Link, createFileRoute  } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { useEffect, useState } from 'react'
+import { Settings } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ChatMessages } from '@/components/chat-messages'
+import { ChatInput } from '@/components/chat-input'
+import { SessionSidebar } from '@/components/session-sidebar'
+import { connectionStore } from '@/stores/connection'
+import { sessionsListStore } from '@/stores/sessions-list'
+import { clientManager } from '@/lib/client-manager'
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute('/')({
   component: ChatPage,
-});
+})
 
 function ChatPage() {
   const { status } = useStore(connectionStore, (state) => ({
     status: state.status,
-  }));
+  }))
 
-  const { sessionId } = useStore(sessionStore, (state) => ({
-    sessionId: state.sessionId,
-  }));
+  const { sessions, activeSessionId } = useStore(
+    sessionsListStore,
+    (state) => ({
+      sessions: state.sessions,
+      activeSessionId: state.activeSessionId,
+    }),
+  )
 
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isCreatingSession, setIsCreatingSession] = useState(false)
 
-  const isConnected = status === "connected";
+  const isConnected = status === 'connected'
 
-  // Auto-create session when connected
+  // Auto-create first session when connected
   useEffect(() => {
-    if (isConnected && !sessionId && !isCreatingSession) {
-      setIsCreatingSession(true);
-      const client = clientManager.getClient();
-      if (client) {
-        client
-          .newSession()
-          .then((result) => {
-            // The RPC response is the authoritative source for sessionId —
-            // it matches the key the server uses in this.sessions.
-            if (result?.sessionId) {
-              setSessionId(result.sessionId);
-            }
-            setIsCreatingSession(false);
-          })
-          .catch((err) => {
-            console.error("Failed to create session:", err);
-            setIsCreatingSession(false);
-          });
-      }
+    if (isConnected && sessions.length === 0 && !isCreatingSession) {
+      setIsCreatingSession(true)
+      clientManager
+        .createNewSession()
+        .then(() => {
+          setIsCreatingSession(false)
+        })
+        .catch((err) => {
+          console.error('Failed to create initial session:', err)
+          setIsCreatingSession(false)
+        })
     }
-  }, [isConnected, sessionId, isCreatingSession]);
+  }, [isConnected, sessions.length, isCreatingSession])
 
   if (!isConnected) {
     return (
@@ -69,7 +65,7 @@ function ChatPage() {
           </Link>
         </div>
       </div>
-    );
+    )
   }
 
   if (isCreatingSession) {
@@ -80,13 +76,16 @@ function ChatPage() {
           <p className="text-sm text-muted-foreground">Creating session...</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <ChatMessages />
-      <ChatInput />
+    <div className="flex h-full">
+      <SessionSidebar />
+      <div className="flex flex-1 flex-col">
+        <ChatMessages />
+        <ChatInput />
+      </div>
     </div>
-  );
+  )
 }

@@ -1,19 +1,19 @@
-import { useStore } from "@tanstack/react-store";
-import { useEffect, useRef } from "react";
-import { messagesStore } from "@/stores/messages";
-import { MessageBubble } from "./message-bubble";
+import { useStore } from '@tanstack/react-store'
+import { useEffect, useRef } from 'react'
+import { MessageBubble } from './message-bubble'
+import { messagesStore } from '@/stores/messages'
 
 export function ChatMessages() {
   const { messages } = useStore(messagesStore, (state) => ({
     messages: state.messages,
-  }));
+  }))
 
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   if (messages.length === 0) {
     return (
@@ -25,7 +25,7 @@ export function ChatMessages() {
           </p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -35,5 +35,5 @@ export function ChatMessages() {
       ))}
       <div ref={bottomRef} />
     </div>
-  );
+  )
 }

@@ -3,173 +3,169 @@
  * Handles incremental token updates during assistant streaming.
  */
 
-import { Store } from "@tanstack/store";
-import type { Message, MessageContent } from "@/lib/types";
+import { Store } from '@tanstack/store'
+import type { Message, MessageContent } from '@/lib/types'
 
 export interface DisplayMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: number;
-  isStreaming?: boolean;
-  thinkingContent?: string;
-  isThinking?: boolean;
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+  isStreaming?: boolean
+  thinkingContent?: string
+  isThinking?: boolean
 }
 
 export interface MessagesStore {
-  messages: DisplayMessage[];
-  streamingContent: string;
-  thinkingContent: string;
-  currentMessageId: string | null;
+  messages: Array<DisplayMessage>
+  streamingContent: string
+  thinkingContent: string
+  currentMessageId: string | null
 }
 
 const INITIAL_STATE: MessagesStore = {
   messages: [],
-  streamingContent: "",
-  thinkingContent: "",
+  streamingContent: '',
+  thinkingContent: '',
   currentMessageId: null,
-};
+}
 
-export const messagesStore = new Store<MessagesStore>(INITIAL_STATE);
+export const messagesStore = new Store<MessagesStore>(INITIAL_STATE)
 
 // ─── Actions ───────────────────────────────────────────────────────────────────
 
 export function addUserMessage(content: string): void {
-  const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  
+  const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+
   messagesStore.setState((state) => ({
     ...state,
     messages: [
       ...state.messages,
       {
         id,
-        role: "user",
+        role: 'user',
         content,
         timestamp: Date.now(),
       },
     ],
-  }));
+  }))
 }
 
 export function startAssistantMessage(): void {
-  const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  
+  const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+
   messagesStore.setState((state) => ({
     ...state,
     currentMessageId: id,
-    streamingContent: "",
+    streamingContent: '',
     messages: [
       ...state.messages,
       {
         id,
-        role: "assistant",
-        content: "",
+        role: 'assistant',
+        content: '',
         timestamp: Date.now(),
         isStreaming: true,
       },
     ],
-  }));
+  }))
 }
 
 export function appendStreamToken(accumulated: string): void {
   messagesStore.setState((state) => {
-    if (!state.currentMessageId) return state;
-    
+    if (!state.currentMessageId) return state
+
     return {
       ...state,
       streamingContent: accumulated,
       messages: state.messages.map((msg) =>
         msg.id === state.currentMessageId
           ? { ...msg, content: accumulated, isStreaming: true }
-          : msg
+          : msg,
       ),
-    };
-  });
+    }
+  })
 }
 
 export function endAssistantMessage(): void {
   messagesStore.setState((state) => ({
     ...state,
-    streamingContent: "",
-    thinkingContent: "",
+    streamingContent: '',
+    thinkingContent: '',
     currentMessageId: null,
     messages: state.messages.map((msg) =>
       msg.id === state.currentMessageId
         ? { ...msg, isStreaming: false, isThinking: false }
-        : msg
+        : msg,
     ),
-  }));
+  }))
 }
 
 export function startThinking(): void {
   messagesStore.setState((state) => {
-    if (!state.currentMessageId) return state;
-    
+    if (!state.currentMessageId) return state
+
     return {
       ...state,
-      thinkingContent: "",
+      thinkingContent: '',
       messages: state.messages.map((msg) =>
-        msg.id === state.currentMessageId
-          ? { ...msg, isThinking: true }
-          : msg
+        msg.id === state.currentMessageId ? { ...msg, isThinking: true } : msg,
       ),
-    };
-  });
+    }
+  })
 }
 
 export function appendThinkingToken(accumulated: string): void {
   messagesStore.setState((state) => {
-    if (!state.currentMessageId) return state;
-    
+    if (!state.currentMessageId) return state
+
     return {
       ...state,
       thinkingContent: accumulated,
       messages: state.messages.map((msg) =>
         msg.id === state.currentMessageId
           ? { ...msg, thinkingContent: accumulated }
-          : msg
+          : msg,
       ),
-    };
-  });
+    }
+  })
 }
 
 export function endThinking(): void {
   messagesStore.setState((state) => {
-    if (!state.currentMessageId) return state;
-    
+    if (!state.currentMessageId) return state
+
     return {
       ...state,
       messages: state.messages.map((msg) =>
-        msg.id === state.currentMessageId
-          ? { ...msg, isThinking: false }
-          : msg
+        msg.id === state.currentMessageId ? { ...msg, isThinking: false } : msg,
       ),
-    };
-  });
+    }
+  })
 }
 
-export function setMessages(messages: Message[]): void {
+export function setMessages(messages: Array<Message>): void {
   // Convert pi's Message format to DisplayMessage format
-  const displayMessages: DisplayMessage[] = messages.map((msg, idx) => {
+  const displayMessages: Array<DisplayMessage> = messages.map((msg, idx) => {
     const textContent = msg.content
-      .filter((c): c is { type: "text"; text: string } => c.type === "text")
+      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
       .map((c) => c.text)
-      .join("\n\n");
-    
+      .join('\n\n')
+
     return {
       id: `msg-${idx}`,
       role: msg.role,
       content: textContent,
       timestamp: Date.now() - (messages.length - idx) * 1000, // Approximate timestamps
-    };
-  });
-  
+    }
+  })
+
   messagesStore.setState((state) => ({
     ...state,
     messages: displayMessages,
-  }));
+  }))
 }
 
 export function clearMessages(): void {
-  messagesStore.setState(INITIAL_STATE);
+  messagesStore.setState(INITIAL_STATE)
 }

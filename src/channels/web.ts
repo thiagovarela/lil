@@ -48,6 +48,7 @@ type RpcCommand =
 	| { id?: string; type: "follow_up"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "abort" }
 	| { id?: string; type: "new_session"; parentSession?: string }
+	| { id?: string; type: "list_sessions" }
 	| { id?: string; type: "get_state" }
 	| { id?: string; type: "set_model"; provider: string; modelId: string }
 	| { id?: string; type: "cycle_model" }
@@ -149,11 +150,11 @@ export class WebChannel implements Channel {
 				// Validate auth token from Authorization header or URL query param
 				const authHeader = req.headers.get("Authorization");
 				const headerToken = authHeader?.replace(/^Bearer\s+/i, "");
-				
+
 				// Also check URL query param (for browser WebSocket clients that can't send headers)
 				const url = new URL(req.url, `http://${req.headers.get("host")}`);
 				const queryToken = url.searchParams.get("token");
-				
+
 				const token = headerToken || queryToken;
 
 				if (token !== this.options.authToken) {
@@ -276,6 +277,25 @@ export class WebChannel implements Channel {
 					command: "new_session",
 					success: true,
 					data: { sessionId: session.sessionId, cancelled },
+				});
+				return;
+			}
+
+			// Special case: list_sessions doesn't need a sessionId
+			if (command.type === "list_sessions") {
+				const sessions = Array.from(this.sessions.entries()).map(([sessionId, session]) => ({
+					sessionId,
+					name: session.sessionName,
+					model: session.model,
+					messageCount: session.messages.length,
+				}));
+
+				this.sendResponse(ws, undefined, {
+					id: commandId,
+					type: "response",
+					command: "list_sessions",
+					success: true,
+					data: { sessions },
 				});
 				return;
 			}

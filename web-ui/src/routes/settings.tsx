@@ -1,41 +1,47 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useStore } from "@tanstack/react-store";
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { connectionStore, updateConnectionSettings } from "@/stores/connection";
-import { clientManager } from "@/lib/client-manager";
+import { createFileRoute } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { useState } from 'react'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { connectionStore, updateConnectionSettings } from '@/stores/connection'
+import { clientManager } from '@/lib/client-manager'
 
-export const Route = createFileRoute("/settings")({
+export const Route = createFileRoute('/settings')({
   component: SettingsPage,
-});
+})
 
 function SettingsPage() {
   const { settings, status } = useStore(connectionStore, (state) => ({
     settings: state.settings,
     status: state.status,
-  }));
+  }))
 
-  const [url, setUrl] = useState(settings.url);
-  const [authToken, setAuthToken] = useState(settings.authToken);
+  const [url, setUrl] = useState(settings.url)
+  const [authToken, setAuthToken] = useState(settings.authToken)
 
-  const isConnected = status === "connected";
-  const isConnecting = status === "connecting";
+  const isConnected = status === 'connected'
+  const isConnecting = status === 'connecting'
 
   const handleSave = () => {
-    updateConnectionSettings({ url, authToken });
-  };
+    updateConnectionSettings({ url, authToken })
+  }
 
   const handleConnect = () => {
-    updateConnectionSettings({ url, authToken });
-    clientManager.connect();
-  };
+    updateConnectionSettings({ url, authToken })
+    clientManager.connect()
+  }
 
   const handleDisconnect = () => {
-    clientManager.disconnect();
-  };
+    clientManager.disconnect()
+  }
 
   return (
     <div className="container max-w-2xl py-8">
@@ -70,17 +76,27 @@ function SettingsPage() {
               disabled={isConnected}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Set with: <code className="rounded bg-muted px-1 py-0.5">clankie config set channels.web.authToken "your-token"</code>
+              Set with:{' '}
+              <code className="rounded bg-muted px-1 py-0.5">
+                clankie config set channels.web.authToken "your-token"
+              </code>
             </p>
           </Field>
 
           <div className="flex gap-2 pt-2">
             {!isConnected ? (
               <>
-                <Button onClick={handleConnect} disabled={isConnecting || !authToken}>
-                  {isConnecting ? "Connecting..." : "Connect"}
+                <Button
+                  onClick={handleConnect}
+                  disabled={isConnecting || !authToken}
+                >
+                  {isConnecting ? 'Connecting...' : 'Connect'}
                 </Button>
-                <Button variant="outline" onClick={handleSave} disabled={isConnecting}>
+                <Button
+                  variant="outline"
+                  onClick={handleSave}
+                  disabled={isConnecting}
+                >
                   Save
                 </Button>
               </>
@@ -132,5 +148,5 @@ function SettingsPage() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

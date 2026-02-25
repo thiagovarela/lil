@@ -1,51 +1,52 @@
-import { useStore } from "@tanstack/react-store";
-import { useState, useRef, KeyboardEvent } from "react";
-import { Send } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { sessionStore } from "@/stores/session";
-import { addUserMessage } from "@/stores/messages";
-import { clientManager } from "@/lib/client-manager";
+import { useStore } from '@tanstack/react-store'
+import { useRef, useState } from 'react'
+import { Send } from 'lucide-react'
+import type { KeyboardEvent } from 'react';
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { sessionStore } from '@/stores/session'
+import { addUserMessage } from '@/stores/messages'
+import { clientManager } from '@/lib/client-manager'
 
 export function ChatInput() {
   const { sessionId, isStreaming } = useStore(sessionStore, (state) => ({
     sessionId: state.sessionId,
     isStreaming: state.isStreaming,
-  }));
+  }))
 
-  const [message, setMessage] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [message, setMessage] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const handleSend = async () => {
-    if (!message.trim() || !sessionId || isStreaming) return;
+    if (!message.trim() || !sessionId || isStreaming) return
 
-    const content = message.trim();
-    setMessage("");
+    const content = message.trim()
+    setMessage('')
 
     // Add user message to UI immediately
-    addUserMessage(content);
+    addUserMessage(content)
 
     // Send to agent
-    const client = clientManager.getClient();
+    const client = clientManager.getClient()
     if (client) {
       try {
-        await client.prompt(sessionId, content);
+        await client.prompt(sessionId, content)
       } catch (err) {
-        console.error("Failed to send message:", err);
+        console.error('Failed to send message:', err)
         // Could show error toast here
       }
     }
 
     // Focus back on textarea
-    textareaRef.current?.focus();
-  };
+    textareaRef.current?.focus()
+  }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      handleSend();
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      handleSend()
     }
-  };
+  }
 
   return (
     <div className="border-t border-border bg-card p-4">
@@ -70,8 +71,9 @@ export function ChatInput() {
         </Button>
       </div>
       <p className="text-xs text-muted-foreground mt-2">
-        Press <kbd className="rounded bg-muted px-1.5 py-0.5">Ctrl+Enter</kbd> to send
+        Press <kbd className="rounded bg-muted px-1.5 py-0.5">Ctrl+Enter</kbd>{' '}
+        to send
       </p>
     </div>
-  );
+  )
 }
