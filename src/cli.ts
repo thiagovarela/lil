@@ -64,6 +64,10 @@ Config paths (dot-separated):
   channels.slack.botToken           Slack bot token (xoxb-...) for API calls
   channels.slack.allowFrom          Allowed Slack user IDs (JSON array of strings)
   channels.slack.enabled            Enable/disable Slack (default: true)
+  channels.web.authToken            Web channel auth token (required, shared secret)
+  channels.web.port                 Web channel port (default: 3100)
+  channels.web.allowedOrigins       Allowed origins (JSON array, empty = allow all)
+  channels.web.enabled              Enable/disable web channel (default: true)
 
 Slack slash commands (when running as daemon):
   /switch <name>                    Switch to a different session
@@ -72,9 +76,16 @@ Slack slash commands (when running as daemon):
 
 Examples:
   clankie login
+  
+  # Slack setup
   clankie config set channels.slack.appToken "xapp-..."
   clankie config set channels.slack.botToken "xoxb-..."
   clankie config set channels.slack.allowFrom ["U12345678"]
+  
+  # Web channel setup
+  clankie config set channels.web.authToken "your-secret-token"
+  clankie config set channels.web.port 3100
+  
   clankie start                         # run in foreground
   clankie daemon install                # install as system service (auto-start on boot)
   clankie daemon logs                   # tail daemon logs

@@ -85,8 +85,9 @@ function execSafe(cmd: string): { ok: boolean; stdout: string; stderr: string } 
 	try {
 		const stdout = execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
 		return { ok: true, stdout: stdout.trim(), stderr: "" };
-	} catch (err: any) {
-		return { ok: false, stdout: err.stdout?.trim() ?? "", stderr: err.stderr?.trim() ?? "" };
+	} catch (err: unknown) {
+		const error = err as { stdout?: string; stderr?: string };
+		return { ok: false, stdout: error.stdout?.trim() ?? "", stderr: error.stderr?.trim() ?? "" };
 	}
 }
 
