@@ -30,9 +30,11 @@ export function addSession(session: SessionListItem): void {
 	sessionsListStore.setState((state) => {
 		// Don't add duplicates
 		if (state.sessions.some((s) => s.sessionId === session.sessionId)) {
+			console.log(`[sessions-list] Skipping duplicate session: ${session.sessionId}`);
 			return state;
 		}
 
+		console.log(`[sessions-list] Adding session: ${session.sessionId}`, session);
 		return {
 			...state,
 			sessions: [...state.sessions, session],
@@ -50,6 +52,7 @@ export function removeSession(sessionId: string): void {
 }
 
 export function setActiveSession(sessionId: string): void {
+	console.log(`[sessions-list] Setting active session: ${sessionId}`);
 	sessionsListStore.setState((state) => ({
 		...state,
 		activeSessionId: sessionId,
@@ -67,5 +70,6 @@ export function updateSessionMeta(
 }
 
 export function clearSessions(): void {
+	console.log("[sessions-list] Clearing all sessions");
 	sessionsListStore.setState(INITIAL_STATE);
 }

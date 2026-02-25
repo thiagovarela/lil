@@ -63,6 +63,7 @@ export class ClankieClient {
 
 	async newSession(parentSession?: string): Promise<{ sessionId: string; cancelled: boolean }> {
 		const response = await this.sendCommand({ type: "new_session", parentSession });
+		console.log("[clankie-client] newSession response:", response);
 		return response as { sessionId: string; cancelled: boolean };
 	}
 

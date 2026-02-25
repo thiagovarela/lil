@@ -122,11 +122,12 @@ class ClientManager {
 
 		try {
 			const { sessions } = await this.client.listSessions();
-			console.log(`[client-manager] Loaded ${sessions.length} sessions from server`);
+			console.log(`[client-manager] Loaded ${sessions.length} sessions from server:`, sessions);
 
 			// Add all sessions to the store (clear first to avoid duplicates)
 			clearSessions();
 			for (const session of sessions) {
+				console.log(`[client-manager] Adding session to store:`, session);
 				addSession({
 					sessionId: session.sessionId,
 					title: session.title,
@@ -153,6 +154,8 @@ class ClientManager {
 			console.log("[client-manager] RPC response:", event);
 			return;
 		}
+
+		console.log(`[client-manager] Received event for session ${sessionId}:`, event.type, event);
 
 		const { activeSessionId } = sessionsListStore.state;
 		const isActiveSession = sessionId === activeSessionId;
@@ -337,7 +340,10 @@ class ClientManager {
 		}
 
 		try {
+			console.log("[client-manager] Requesting new session from server...");
 			const result = await this.client.newSession();
+			console.log("[client-manager] Received new session result:", result);
+			
 			if (result.cancelled) {
 				console.log("[client-manager] Session creation cancelled");
 				return null;
@@ -345,6 +351,7 @@ class ClientManager {
 
 			// Optimistically add session to the list immediately
 			// (session_start event will update metadata later)
+			console.log(`[client-manager] Creating new session with ID: ${result.sessionId}`);
 			addSession({
 				sessionId: result.sessionId,
 				title: undefined,
@@ -354,6 +361,9 @@ class ClientManager {
 
 			// Set it as active
 			setActiveSession(result.sessionId);
+			
+			// Set the session ID immediately so chat input works right away
+			setSessionId(result.sessionId);
 
 			// Save to localStorage for persistence across page refreshes
 			localStorage.setItem("clankie-last-session-id", result.sessionId);
@@ -377,6 +387,9 @@ class ClientManager {
 		try {
 			// Set as active session
 			setActiveSession(sessionId);
+			
+			// Set the session ID immediately so chat input works right away
+			setSessionId(sessionId);
 
 			// Save to localStorage for persistence across page refreshes
 			localStorage.setItem("clankie-last-session-id", sessionId);
@@ -385,7 +398,9 @@ class ClientManager {
 			clearMessages();
 
 			// Fetch messages for the new session
+			console.log(`[client-manager] Fetching messages for session: ${sessionId}`);
 			const { messages } = await this.client.getMessages(sessionId);
+			console.log(`[client-manager] Loaded ${messages.length} messages for session ${sessionId}`);
 			setMessages(messages);
 
 			// Fetch and update session state

@@ -291,15 +291,19 @@ export class WebChannel implements Channel {
 			if (command.type === "new_session") {
 				const config = loadConfig();
 				const chatKey = `web_${crypto.randomUUID()}`;
+				console.log(`[web] Creating new session with chatKey: ${chatKey}`);
 				const session = await getOrCreateSession(chatKey, config);
+				console.log(`[web] After getOrCreateSession - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
 
 				const options = command.parentSession ? { parentSession: command.parentSession } : undefined;
 				const cancelled = !(await session.newSession(options));
+				console.log(`[web] After session.newSession() - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
 
 				// Subscribe using the chatKey (not session.sessionId) for consistency
 				this.subscribeToSessionWithKey(chatKey, session, ws);
 
 				// Return the chatKey as sessionId so client uses it for future commands
+				console.log(`[web] Returning sessionId to client: ${chatKey}, cancelled: ${cancelled}`);
 				this.sendResponse(ws, chatKey, {
 					id: commandId,
 					type: "response",
@@ -352,13 +356,17 @@ export class WebChannel implements Channel {
 				// Try to restore session from disk
 				try {
 					const config = loadConfig();
+					console.log(`[web] Restoring session from disk - chatKey: ${sessionId}`);
 					session = await getOrCreateSession(sessionId, config);
+					console.log(`[web] After restore - chatKey: ${sessionId}, session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
 					this.subscribeToSessionWithKey(sessionId, session, ws);
 					console.log(`[web] Restored session from disk: ${sessionId}`);
 				} catch (err) {
 					this.sendError(ws, sessionId, command.type, `Session not found: ${sessionId}`, commandId);
 					return;
 				}
+			} else {
+				console.log(`[web] Using cached session - chatKey: ${sessionId}, session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
 			}
 
 			// Execute command (mirrors rpc-mode.ts logic)
@@ -375,6 +383,7 @@ export class WebChannel implements Channel {
 
 		switch (command.type) {
 			case "prompt": {
+				console.log(`[web] Executing prompt - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
 				// Don't await - events will stream
 				session
 					.prompt(command.message, {
@@ -385,6 +394,7 @@ export class WebChannel implements Channel {
 					.catch((e) => {
 						console.error("[web] Prompt error:", e);
 					});
+				console.log(`[web] After prompt - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
 				return { id, type: "response", command: "prompt", success: true };
 			}
 

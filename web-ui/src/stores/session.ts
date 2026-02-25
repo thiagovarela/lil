@@ -44,9 +44,12 @@ export function setSessionId(sessionId: string): void {
 }
 
 export function updateSessionState(sessionState: Partial<SessionState>): void {
+	// Destructure to exclude sessionId - we manage that separately with setSessionId()
+	const { sessionId: _ignoredSessionId, ...stateWithoutSessionId } = sessionState;
+	
 	sessionStore.setState((state) => ({
 		...state,
-		...sessionState,
+		...stateWithoutSessionId,
 	}));
 }
 

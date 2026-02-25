@@ -33,8 +33,13 @@ const chatLocks = new Map<string, Promise<void>>();
 // ─── Session factory ───────────────────────────────────────────────────────────
 
 export async function getOrCreateSession(chatKey: string, config: AppConfig): Promise<AgentSession> {
+	console.log(`[session] getOrCreateSession called - chatKey: ${chatKey}, cache has: ${sessionCache.size} entries`);
 	const cached = sessionCache.get(chatKey);
-	if (cached) return cached;
+	if (cached) {
+		console.log(`[session] Returning cached session - chatKey: ${chatKey}, session.sessionId: ${cached.sessionId}`);
+		return cached;
+	}
+	console.log(`[session] No cached session found for chatKey: ${chatKey}, creating new...`);
 
 	const agentDir = getAgentDir(config);
 	const cwd = getWorkspace(config);
@@ -56,7 +61,10 @@ export async function getOrCreateSession(chatKey: string, config: AppConfig): Pr
 		mkdirSync(sessionDir, { recursive: true });
 	}
 
+	// SessionManager.continueRecent continues the most recent session in the given directory
+	// It SHOULD keep using that directory for all future saves
 	const sessionManager = SessionManager.continueRecent(cwd, sessionDir);
+	console.log(`[session] SessionManager created for chatKey: ${chatKey}, sessionDir: ${sessionDir}`);
 
 	// Resolve model from config → pi auto-detection
 	const modelSpec = config.agent?.model?.primary;
@@ -84,6 +92,7 @@ export async function getOrCreateSession(chatKey: string, config: AppConfig): Pr
 	});
 
 	const { session } = result;
+	console.log(`[session] Created AgentSession - chatKey: ${chatKey}, session.sessionId: ${session.sessionId}, session.sessionFile: ${session.sessionFile}`);
 
 	// Bind extensions (headless — no UI)
 	await session.bindExtensions({
@@ -125,7 +134,12 @@ export async function getOrCreateSession(chatKey: string, config: AppConfig): Pr
 	// Subscribe to enable session persistence
 	session.subscribe(() => {});
 
+	console.log(`[session] Caching session - chatKey: ${chatKey}, session.sessionId: ${session.sessionId}`);
 	sessionCache.set(chatKey, session);
+	
+	// Log the cache state
+	console.log(`[session] Session cache now has ${sessionCache.size} entries`);
+	
 	return session;
 }
 
