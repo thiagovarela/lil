@@ -1,4 +1,5 @@
 import { Store } from '@tanstack/store'
+import type { Message } from '@/lib/types'
 import { messagesStore } from '@/stores/messages'
 
 export interface ToolResultContentText {
@@ -35,6 +36,53 @@ const INITIAL_STATE: ToolExecutionsStore = {
 }
 
 export const toolExecutionsStore = new Store<ToolExecutionsStore>(INITIAL_STATE)
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isToolUseBlock(block: unknown): block is {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: unknown
+} {
+  return (
+    isRecord(block) &&
+    block.type === 'tool_use' &&
+    typeof block.id === 'string' &&
+    typeof block.name === 'string'
+  )
+}
+
+function toHistoricalToolResult(message: Message): {
+  result: ToolExecutionResult
+  isError: boolean
+} | null {
+  if (message.role !== 'toolResult' || typeof message.toolCallId !== 'string') {
+    return null
+  }
+
+  let content: ToolExecutionResult['content']
+  if (typeof message.content === 'string') {
+    content = [{ type: 'text', text: message.content }]
+  } else if (Array.isArray(message.content)) {
+    content = (message.content as Array<unknown>).filter(
+      (item): item is ToolResultContentText | Record<string, unknown> =>
+        isRecord(item),
+    )
+  }
+
+  const details = isRecord(message.details) ? message.details : undefined
+
+  return {
+    result: {
+      ...(content !== undefined ? { content } : {}),
+      ...(details !== undefined ? { details } : {}),
+    },
+    isError: Boolean(message.isError),
+  }
+}
 
 function resolveCurrentAssistantMessageId(): string | null {
   const { currentMessageId, messages } = messagesStore.state
@@ -116,6 +164,71 @@ export function finishToolExecution(params: {
       },
     }
   })
+}
+
+export function hydrateToolExecutionsFromMessages(
+  messages: Array<Message>,
+): void {
+  const toolResultsByCallId = new Map<
+    string,
+    {
+      result: ToolExecutionResult
+      isError: boolean
+    }
+  >()
+
+  for (const message of messages) {
+    const parsed = toHistoricalToolResult(message)
+    if (!parsed || typeof message.toolCallId !== 'string') continue
+    toolResultsByCallId.set(message.toolCallId, parsed)
+  }
+
+  const now = Date.now()
+  const executions: Partial<Record<string, ToolExecution>> = {}
+  const executionOrder: Array<string> = []
+  let displayMessageIndex = 0
+
+  for (const message of messages) {
+    if (message.role !== 'user' && message.role !== 'assistant') continue
+
+    const messageId = `msg-${displayMessageIndex}`
+
+    if (message.role === 'assistant' && Array.isArray(message.content)) {
+      for (const block of message.content) {
+        if (!isToolUseBlock(block)) continue
+
+        const historicalResult = toolResultsByCallId.get(block.id)
+        const args = isRecord(block.input) ? block.input : {}
+
+        executions[block.id] = {
+          toolCallId: block.id,
+          toolName: block.name,
+          args,
+          status: historicalResult
+            ? historicalResult.isError
+              ? 'error'
+              : 'completed'
+            : 'completed',
+          result: historicalResult?.result,
+          isError: historicalResult?.isError,
+          startTime: now,
+          endTime: now,
+          messageId,
+        }
+
+        if (!executionOrder.includes(block.id)) {
+          executionOrder.push(block.id)
+        }
+      }
+    }
+
+    displayMessageIndex += 1
+  }
+
+  toolExecutionsStore.setState(() => ({
+    executions,
+    executionOrder,
+  }))
 }
 
 export function getToolExecutionsForMessage(

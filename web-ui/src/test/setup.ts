@@ -11,6 +11,7 @@ import { extensionsStore } from '@/stores/extensions'
 import { messagesStore } from '@/stores/messages'
 import { sessionStore } from '@/stores/session'
 import { sessionsListStore } from '@/stores/sessions-list'
+import { toolExecutionsStore } from '@/stores/tool-executions'
 
 // Store initial states for reset
 const INITIAL_AUTH_STATE = {
@@ -67,6 +68,11 @@ const INITIAL_SESSIONS_LIST_STATE = {
   activeSessionId: null,
 }
 
+const INITIAL_TOOL_EXECUTIONS_STATE = {
+  executions: {},
+  executionOrder: [],
+}
+
 /**
  * Reset all stores to their initial state
  */
@@ -77,6 +83,7 @@ export function resetAllStores(): void {
   messagesStore.setState(() => INITIAL_MESSAGES_STATE)
   sessionStore.setState(() => INITIAL_SESSION_STATE)
   sessionsListStore.setState(() => INITIAL_SESSIONS_LIST_STATE)
+  toolExecutionsStore.setState(() => INITIAL_TOOL_EXECUTIONS_STATE)
 }
 
 // Clean up after each test

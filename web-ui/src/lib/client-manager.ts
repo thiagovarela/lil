@@ -7,7 +7,10 @@ import { handleAuthEvent, handleSessionEvent } from './event-handlers'
 import type { ExtensionUIResponse } from './types'
 import { connectionStore, updateConnectionStatus } from '@/stores/connection'
 import { clearMessages, setMessages } from '@/stores/messages'
-import { clearToolExecutions } from '@/stores/tool-executions'
+import {
+  clearToolExecutions,
+  hydrateToolExecutionsFromMessages,
+} from '@/stores/tool-executions'
 import {
   handleExtensionUIRequest,
   resetExtensionUI,
@@ -263,6 +266,7 @@ class ClientManager {
         `[client-manager] Loaded ${messages.length} messages for session ${sessionId}`,
       )
       setMessages(messages)
+      hydrateToolExecutionsFromMessages(messages)
 
       // Fetch and update session state
       const state = await this.client.getState(sessionId)
