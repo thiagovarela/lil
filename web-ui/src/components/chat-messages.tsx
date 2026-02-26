@@ -13,7 +13,7 @@ export function ChatMessages() {
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [])
 
   if (messages.length === 0) {
     return (

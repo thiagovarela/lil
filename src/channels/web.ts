@@ -294,11 +294,15 @@ export class WebChannel implements Channel {
 				const chatKey = `web_${crypto.randomUUID()}`;
 				console.log(`[web] Creating new session with chatKey: ${chatKey}`);
 				const session = await getOrCreateSession(chatKey, config);
-				console.log(`[web] After getOrCreateSession - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
+				console.log(
+					`[web] After getOrCreateSession - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`,
+				);
 
 				const options = command.parentSession ? { parentSession: command.parentSession } : undefined;
 				const cancelled = !(await session.newSession(options));
-				console.log(`[web] After session.newSession() - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
+				console.log(
+					`[web] After session.newSession() - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`,
+				);
 
 				// Subscribe using the chatKey (not session.sessionId) for consistency
 				this.subscribeToSessionWithKey(chatKey, session, ws);
@@ -359,15 +363,19 @@ export class WebChannel implements Channel {
 					const config = loadConfig();
 					console.log(`[web] Restoring session from disk - chatKey: ${sessionId}`);
 					session = await getOrCreateSession(sessionId, config);
-					console.log(`[web] After restore - chatKey: ${sessionId}, session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
+					console.log(
+						`[web] After restore - chatKey: ${sessionId}, session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`,
+					);
 					this.subscribeToSessionWithKey(sessionId, session, ws);
 					console.log(`[web] Restored session from disk: ${sessionId}`);
-				} catch (err) {
+				} catch (_err) {
 					this.sendError(ws, sessionId, command.type, `Session not found: ${sessionId}`, commandId);
 					return;
 				}
 			} else {
-				console.log(`[web] Using cached session - chatKey: ${sessionId}, session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
+				console.log(
+					`[web] Using cached session - chatKey: ${sessionId}, session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`,
+				);
 			}
 
 			// Execute command (mirrors rpc-mode.ts logic)
@@ -384,7 +392,9 @@ export class WebChannel implements Channel {
 
 		switch (command.type) {
 			case "prompt": {
-				console.log(`[web] Executing prompt - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
+				console.log(
+					`[web] Executing prompt - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`,
+				);
 				// Don't await - events will stream
 				session
 					.prompt(command.message, {
@@ -395,7 +405,9 @@ export class WebChannel implements Channel {
 					.catch((e) => {
 						console.error("[web] Prompt error:", e);
 					});
-				console.log(`[web] After prompt - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`);
+				console.log(
+					`[web] After prompt - session.sessionId: ${session.sessionId}, sessionFile: ${session.sessionFile}`,
+				);
 				return { id, type: "response", command: "prompt", success: true };
 			}
 
@@ -416,26 +428,26 @@ export class WebChannel implements Channel {
 
 			case "upload_attachment": {
 				const { fileName, data, mimeType } = command;
-				
+
 				// Save attachment to disk
 				const { mkdirSync, writeFileSync } = await import("node:fs");
 				const { join } = await import("node:path");
-				
+
 				// Use sessionId (which is the chatKey like web_xxx) to organize attachments
 				const dir = join(getAppDir(), "attachments", sessionId);
 				mkdirSync(dir, { recursive: true });
-				
+
 				// Create a unique filename with timestamp
 				const timestamp = Date.now();
 				const sanitizedName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
 				const uniqueFileName = `${timestamp}_${sanitizedName}`;
 				const filePath = join(dir, uniqueFileName);
-				
+
 				// Write the base64 data to disk
 				writeFileSync(filePath, Buffer.from(data, "base64"));
-				
+
 				console.log(`[web] Saved attachment: ${filePath} (${mimeType})`);
-				
+
 				return {
 					id,
 					type: "response",
@@ -1019,11 +1031,6 @@ export class WebChannel implements Channel {
 		}
 	}
 
-	private subscribeToSession(session: AgentSession, ws: ServerWebSocket<ConnectionData>): void {
-		// Legacy method - uses session.sessionId (kept for backwards compatibility if needed)
-		this.subscribeToSessionWithKey(session.sessionId, session, ws);
-	}
-
 	private broadcastEvent(sessionId: string, event: AgentSessionEvent): void {
 		const subscribers = this.sessionSubscriptions.get(sessionId);
 		if (!subscribers) return;
@@ -1102,7 +1109,7 @@ export class WebChannel implements Channel {
 			}
 
 			return lastUserMessage;
-		} catch (err) {
+		} catch (_err) {
 			return undefined;
 		}
 	}

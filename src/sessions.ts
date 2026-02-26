@@ -92,7 +92,9 @@ export async function getOrCreateSession(chatKey: string, config: AppConfig): Pr
 	});
 
 	const { session } = result;
-	console.log(`[session] Created AgentSession - chatKey: ${chatKey}, session.sessionId: ${session.sessionId}, session.sessionFile: ${session.sessionFile}`);
+	console.log(
+		`[session] Created AgentSession - chatKey: ${chatKey}, session.sessionId: ${session.sessionId}, session.sessionFile: ${session.sessionFile}`,
+	);
 
 	// Bind extensions (headless — no UI)
 	await session.bindExtensions({
@@ -136,10 +138,10 @@ export async function getOrCreateSession(chatKey: string, config: AppConfig): Pr
 
 	console.log(`[session] Caching session - chatKey: ${chatKey}, session.sessionId: ${session.sessionId}`);
 	sessionCache.set(chatKey, session);
-	
+
 	// Log the cache state
 	console.log(`[session] Session cache now has ${sessionCache.size} entries`);
-	
+
 	return session;
 }
 

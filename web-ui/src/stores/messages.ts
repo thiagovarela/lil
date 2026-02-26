@@ -4,7 +4,7 @@
  */
 
 import { Store } from '@tanstack/store'
-import type { Message, MessageContent } from '@/lib/types'
+import type { Message } from '@/lib/types'
 
 export interface DisplayMessage {
   id: string
