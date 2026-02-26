@@ -22,7 +22,7 @@ import {
 	setThinkingLevel,
 	updateSessionState,
 } from "@/stores/session";
-import { addSession, updateSessionMeta } from "@/stores/sessions-list";
+import { addSession, touchSessionActivity, updateSessionMeta } from "@/stores/sessions-list";
 
 /**
  * Handle session events from the WebSocket.
@@ -163,6 +163,9 @@ export function handleSessionEvent(
 		}
 
 		case "message_end":
+			// Update session activity timestamp for any message (user or assistant)
+			touchSessionActivity(sessionId);
+
 			if (isActiveSession) {
 				if (event.message?.role === "assistant") {
 					endAssistantMessage();

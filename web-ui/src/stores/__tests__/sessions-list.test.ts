@@ -7,6 +7,7 @@ import {
 	removeSession,
 	sessionsListStore,
 	setActiveSession,
+	touchSessionActivity,
 	updateSessionMeta,
 } from "../sessions-list";
 
@@ -175,13 +176,13 @@ describe("sessions-list store", () => {
 		});
 	});
 
-	describe("setActiveSession with updatedAt", () => {
-		it("updates the updatedAt timestamp when setting active session", () => {
+	describe("touchSessionActivity", () => {
+		it("updates the updatedAt timestamp for a session", () => {
 			const now = Date.now();
 			vi.setSystemTime(now);
 
 			addSession(makeSessionListItem({ sessionId: "session-1" }));
-			setActiveSession("session-1");
+			touchSessionActivity("session-1");
 
 			const { sessions } = sessionsListStore.state;
 			expect(sessions[0].updatedAt).toBe(now);
@@ -189,21 +190,42 @@ describe("sessions-list store", () => {
 			vi.useRealTimers();
 		});
 
-		it("updates updatedAt each time session becomes active", () => {
+		it("updates updatedAt each time activity occurs", () => {
 			const time1 = Date.now();
 			vi.setSystemTime(time1);
 
 			addSession(makeSessionListItem({ sessionId: "session-1" }));
-			setActiveSession("session-1");
+			touchSessionActivity("session-1");
 
 			const time2 = time1 + 5000;
 			vi.setSystemTime(time2);
-			setActiveSession("session-1");
+			touchSessionActivity("session-1");
 
 			const { sessions } = sessionsListStore.state;
 			expect(sessions[0].updatedAt).toBe(time2);
 
 			vi.useRealTimers();
+		});
+
+		it("does not affect other sessions", () => {
+			addSession(makeSessionListItem({ sessionId: "session-1" }));
+			addSession(makeSessionListItem({ sessionId: "session-2" }));
+
+			touchSessionActivity("session-1");
+
+			const { sessions } = sessionsListStore.state;
+			expect(sessions[0].updatedAt).toBeDefined();
+			expect(sessions[1].updatedAt).toBeUndefined();
+		});
+
+		it("does nothing if session does not exist", () => {
+			addSession(makeSessionListItem({ sessionId: "session-1" }));
+
+			touchSessionActivity("nonexistent");
+
+			const { sessions } = sessionsListStore.state;
+			expect(sessions).toHaveLength(1);
+			expect(sessions[0].updatedAt).toBeUndefined();
 		});
 	});
 

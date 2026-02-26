@@ -54,11 +54,16 @@ export function removeSession(sessionId: string): void {
 
 export function setActiveSession(sessionId: string): void {
 	console.log(`[sessions-list] Setting active session: ${sessionId}`);
-	const now = Date.now();
 	sessionsListStore.setState((state) => ({
 		...state,
 		activeSessionId: sessionId,
-		// Update the session's updatedAt timestamp
+	}));
+}
+
+export function touchSessionActivity(sessionId: string): void {
+	const now = Date.now();
+	sessionsListStore.setState((state) => ({
+		...state,
 		sessions: state.sessions.map((s) =>
 			s.sessionId === sessionId ? { ...s, updatedAt: now } : s
 		),
