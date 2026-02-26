@@ -176,9 +176,11 @@ export class WebChannel implements Channel {
 		const { injectWebSocket, upgradeWebSocket: wsUpgrade } = createNodeWebSocket({ app });
 
 		// ─── WebSocket route ──────────────────────────────────────────────────
+		// Note: upgradeWebSocket() handles WebSocket upgrade requests at the root path
+		// Regular HTTP requests fall through to static file serving
 
 		app.get(
-			"/ws",
+			"/",
 			wsUpgrade((c) => {
 				// Validate auth token from Authorization header or URL query param
 				const authHeader = c.req.header("Authorization");
