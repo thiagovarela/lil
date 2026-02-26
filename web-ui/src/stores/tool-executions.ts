@@ -169,6 +169,17 @@ export function finishToolExecution(params: {
 export function hydrateToolExecutionsFromMessages(
   messages: Array<Message>,
 ): void {
+  console.log(
+    '[tool-executions] hydrate start',
+    messages.map((m, index) => ({
+      index,
+      role: m.role,
+      contentType: Array.isArray(m.content) ? 'array' : typeof m.content,
+      contentLength: Array.isArray(m.content) ? m.content.length : undefined,
+      toolCallId: typeof m.toolCallId === 'string' ? m.toolCallId : undefined,
+    })),
+  )
+
   const toolResultsByCallId = new Map<
     string,
     {
@@ -183,10 +194,16 @@ export function hydrateToolExecutionsFromMessages(
     toolResultsByCallId.set(message.toolCallId, parsed)
   }
 
+  console.log(
+    '[tool-executions] toolResult callIds:',
+    Array.from(toolResultsByCallId.keys()),
+  )
+
   const now = Date.now()
   const executions: Partial<Record<string, ToolExecution>> = {}
   const executionOrder: Array<string> = []
   let displayMessageIndex = 0
+  const unmatchedToolUses: Array<string> = []
 
   for (const message of messages) {
     if (message.role !== 'user' && message.role !== 'assistant') continue
@@ -199,6 +216,10 @@ export function hydrateToolExecutionsFromMessages(
 
         const historicalResult = toolResultsByCallId.get(block.id)
         const args = isRecord(block.input) ? block.input : {}
+
+        if (!historicalResult) {
+          unmatchedToolUses.push(block.id)
+        }
 
         executions[block.id] = {
           toolCallId: block.id,
@@ -229,6 +250,12 @@ export function hydrateToolExecutionsFromMessages(
     executions,
     executionOrder,
   }))
+
+  console.log('[tool-executions] hydrate complete', {
+    hydratedExecutions: executionOrder.length,
+    executionOrder,
+    unmatchedToolUses,
+  })
 }
 
 export function getToolExecutionsForMessage(
