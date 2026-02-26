@@ -25,48 +25,35 @@ fi
 
 # Add mise activation to .bashrc if not already there
 if ! grep -q 'mise activate bash' ~/.bashrc 2>/dev/null; then
-  echo 'export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"' >> ~/.bashrc
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
   echo 'eval "$(mise activate bash)"' >> ~/.bashrc
-  info "Added mise and bun to ~/.bashrc"
+  info "Added mise to ~/.bashrc"
 fi
 
 # Activate mise shims for the current script
 eval "$(mise activate bash --shims)"
 
-# ─── 2. Install bun via mise ─────────────────────────────────────────
-if mise ls bun 2>/dev/null | grep -q bun; then
-  info "bun is already installed via mise ($(bun --version))"
-else
-  warn "Installing bun via mise…"
-  mise use --global bun@latest
-  eval "$(mise activate bash --shims)"
-  info "bun installed ($(bun --version))"
-fi
-
-# Ensure bun global bin is in PATH
-export PATH="$HOME/.bun/bin:$PATH"
-
-# ─── 3. Install pi via bun ───────────────────────────────────────────
+# ─── 2. Install pi via npm ──────────────────────────────────────────
 if command -v pi &>/dev/null; then
   info "pi is already installed ($(pi --version 2>/dev/null || echo 'unknown'))"
 else
-  warn "Installing pi via bun…"
-  bun install --global @mariozechner/pi-coding-agent
+  warn "Installing pi via npm…"
+  npm install --global @mariozechner/pi-coding-agent
   command -v pi &>/dev/null || fail "pi installation failed"
   info "pi installed ($(pi --version 2>/dev/null || echo 'unknown'))"
 fi
 
-# ─── 4. Install clankie via bun ──────────────────────────────────────
+# ─── 3. Install clankie via npm ──────────────────────────────────────
 if command -v clankie &>/dev/null; then
   info "clankie is already installed"
 else
-  warn "Installing clankie via bun…"
-  bun install --global clankie
+  warn "Installing clankie via npm…"
+  npm install --global clankie
   command -v clankie &>/dev/null || fail "clankie installation failed"
   info "clankie installed"
 fi
 
-# ─── 5. Initialize clankie ───────────────────────────────────────────
+# ─── 4. Initialize clankie ───────────────────────────────────────────
 warn "Running clankie init…"
 clankie init
 info "clankie init complete"

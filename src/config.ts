@@ -104,8 +104,8 @@ export function getConfigPath(): string {
  * Returns the path if found, undefined otherwise.
  */
 export function getBundledWebUiDir(): string | undefined {
-	// import.meta.dir → <package>/src/ at runtime
-	const packageRoot = join(import.meta.dir, "..");
+	// import.meta.dirname → <package>/src/ at runtime (Node 21+)
+	const packageRoot = join(import.meta.dirname, "..");
 	const bundledDir = join(packageRoot, "web-ui-dist");
 	if (existsSync(bundledDir) && existsSync(join(bundledDir, "_shell.html"))) {
 		return bundledDir;

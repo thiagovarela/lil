@@ -2,13 +2,13 @@
 	"compilerOptions": {
 		"target": "ESNext",
 		"module": "ESNext",
-		"moduleResolution": "bundler",
+		"moduleResolution": "nodenext",
 		"lib": ["ESNext"],
 		"strict": true,
 		"skipLibCheck": true,
 		"allowImportingTsExtensions": true,
 		"noEmit": true,
-		"types": ["bun-types"]
+		"types": ["node"]
 	},
 	"include": ["src/**/*"]
 }

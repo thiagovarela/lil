@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 /**
  * clankie — CLI entry point
@@ -105,7 +105,7 @@ Credentials are stored at ~/.clankie/auth.json (separate from pi's auth).
 
 function printVersion(): void {
 	// Read version from package.json at repo root (../ from src/)
-	const packagePath = join(import.meta.dir, "..", "package.json");
+	const packagePath = join(import.meta.dirname, "..", "package.json");
 	try {
 		const pkg = JSON.parse(readFileSync(packagePath, "utf-8"));
 		console.log(`clankie ${pkg.version}`);

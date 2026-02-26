@@ -1,13 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { handleSessionEvent } from "@/lib/event-handlers";
-import { makeModelInfo } from "@/test/fixtures";
 import { ChatMessages } from "@/components/chat-messages";
 import { ConnectionStatus } from "@/components/connection-status";
+import { handleSessionEvent } from "@/lib/event-handlers";
+import { updateConnectionStatus } from "@/stores/connection";
 import { messagesStore } from "@/stores/messages";
 import { sessionStore } from "@/stores/session";
 import { sessionsListStore, setActiveSession } from "@/stores/sessions-list";
-import { updateConnectionStatus } from "@/stores/connection";
+import { makeModelInfo } from "@/test/fixtures";
 
 describe("Event-to-Render Integration Tests", () => {
 	describe("Full conversation turn", () => {
