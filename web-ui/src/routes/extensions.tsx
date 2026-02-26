@@ -34,7 +34,12 @@ function ExtensionsPage() {
 
 	const { extensions, extensionErrors, skills, skillDiagnostics, isLoading, installStatus } = useStore(
 		extensionsStore,
-		(state) => state,
+		(state) => {
+			console.log("[extensions] Store state:", state);
+			console.log("[extensions] extensions type:", typeof state.extensions, "isArray:", Array.isArray(state.extensions));
+			console.log("[extensions] extensions value:", state.extensions);
+			return state;
+		},
 	);
 
 	const [packageSource, setPackageSource] = useState("");
