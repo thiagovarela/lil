@@ -265,6 +265,34 @@ class ClientManager {
       console.log(
         `[client-manager] Loaded ${messages.length} messages for session ${sessionId}`,
       )
+
+      const rolesSummary = messages.reduce(
+        (acc, msg) => {
+          const role = String(msg.role)
+          acc[role] = (acc[role] ?? 0) + 1
+          return acc
+        },
+        {} as Record<string, number>,
+      )
+      console.log('[client-manager] getMessages roles summary:', rolesSummary)
+
+      const assistantToolUseSummary = messages
+        .filter((msg) => msg.role === 'assistant' && Array.isArray(msg.content))
+        .map((msg, index) => {
+          const content = Array.isArray(msg.content) ? msg.content : []
+          return {
+            assistantIndex: index,
+            contentTypes: content.map((block: any) => block?.type),
+            toolUseIds: content
+              .filter((block: any) => block?.type === 'tool_use')
+              .map((block: any) => block?.id),
+          }
+        })
+      console.log(
+        '[client-manager] assistant content/tool_use summary:',
+        assistantToolUseSummary,
+      )
+
       setMessages(messages)
       hydrateToolExecutionsFromMessages(messages)
 
