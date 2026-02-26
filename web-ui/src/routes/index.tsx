@@ -1,31 +1,39 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Settings } from 'lucide-react'
-import { ChatInput } from '@/components/chat-input'
-import { ChatMessages } from '@/components/chat-messages'
-import { SessionSidebar } from '@/components/session-sidebar'
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { connectionStore } from '@/stores/connection'
 import { sessionsListStore } from '@/stores/sessions-list'
 
 export const Route = createFileRoute('/')({
-  component: ChatPage,
+  component: IndexPage,
 })
 
-function ChatPage() {
+function IndexPage() {
+  const navigate = useNavigate()
+
   const { status } = useStore(connectionStore, (state) => ({
     status: state.status,
   }))
 
-  const { sessions, activeSessionId } = useStore(
-    sessionsListStore,
-    (state) => ({
-      sessions: state.sessions,
-      activeSessionId: state.activeSessionId,
-    }),
-  )
+  const { activeSessionId } = useStore(sessionsListStore, (state) => ({
+    activeSessionId: state.activeSessionId,
+  }))
 
   const isConnected = status === 'connected'
+
+  // Redirect to active session when available
+  useEffect(() => {
+    if (!isConnected) return
+
+    if (activeSessionId) {
+      console.log(
+        `[index] Redirecting to active session: ${activeSessionId}`,
+      )
+      navigate({ to: '/sessions/$sessionId', params: { sessionId: activeSessionId } })
+    }
+  }, [activeSessionId, isConnected, navigate])
 
   if (!isConnected) {
     return (
@@ -49,23 +57,11 @@ function ChatPage() {
   }
 
   // Show loading state while waiting for initial session
-  if (isConnected && sessions.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
-          <p className="text-sm text-muted-foreground">Loading sessions...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex h-full">
-      <SessionSidebar />
-      <div className="flex flex-1 flex-col">
-        <ChatMessages />
-        <ChatInput />
+    <div className="flex h-full items-center justify-center">
+      <div className="text-center space-y-2">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+        <p className="text-sm text-muted-foreground">Loading sessions...</p>
       </div>
     </div>
   )

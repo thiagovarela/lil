@@ -24,7 +24,7 @@ const INITIAL_STATE: SessionStore = {
   sessionId: null,
   model: null,
   availableModels: [],
-  thinkingLevel: 'normal',
+  thinkingLevel: 'medium',
   isStreaming: false,
   isCompacting: false,
   steeringMode: 'one-at-a-time',

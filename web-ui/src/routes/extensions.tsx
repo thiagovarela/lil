@@ -9,7 +9,7 @@ import {
   Settings,
   Sparkles,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -60,13 +60,7 @@ function ExtensionsPage() {
 
   const isConnected = status === 'connected'
 
-  useEffect(() => {
-    if (isConnected && activeSessionId) {
-      loadExtensionsAndSkills()
-    }
-  }, [isConnected, activeSessionId, loadExtensionsAndSkills])
-
-  const loadExtensionsAndSkills = async () => {
+  const loadExtensionsAndSkills = useCallback(async () => {
     const client = clientManager.getClient()
     if (!client || !activeSessionId) return
 
@@ -83,7 +77,13 @@ function ExtensionsPage() {
       console.error('Failed to load extensions and skills:', err)
       setLoading(false)
     }
-  }
+  }, [activeSessionId])
+
+  useEffect(() => {
+    if (isConnected && activeSessionId) {
+      loadExtensionsAndSkills()
+    }
+  }, [isConnected, activeSessionId, loadExtensionsAndSkills])
 
   const handleInstall = async () => {
     const client = clientManager.getClient()

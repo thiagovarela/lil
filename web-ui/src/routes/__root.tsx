@@ -1,14 +1,18 @@
 import {
   HeadContent,
-  Link,
   Outlet,
   Scripts,
   createRootRoute,
 } from '@tanstack/react-router'
-import { MessageSquare, Puzzle, Settings } from 'lucide-react'
 import { useEffect } from 'react'
 import appCss from '../styles.css?url'
-import { ConnectionStatus } from '@/components/connection-status'
+import { AppSidebar } from '@/components/app-sidebar'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
 import { clientManager } from '@/lib/client-manager'
 import { connectionStore } from '@/stores/connection'
 
@@ -48,45 +52,19 @@ function RootComponent() {
 
   return (
     <RootDocument>
-      <div className="flex h-screen flex-col">
-        <header className="border-b border-border bg-card">
-          <div className="flex h-14 items-center gap-4 px-4">
-            <h1 className="text-lg font-semibold">clankie</h1>
-
-            <nav className="flex gap-2">
-              <Link
-                to="/"
-                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
-              >
-                <MessageSquare className="h-4 w-4" />
-                Chat
-              </Link>
-              <Link
-                to="/extensions"
-                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
-              >
-                <Puzzle className="h-4 w-4" />
-                Extensions & Skills
-              </Link>
-              <Link
-                to="/settings"
-                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
-            </nav>
-
-            <div className="ml-auto">
-              <ConnectionStatus />
+      <TooltipProvider>
+        <SidebarProvider>
+          <AppSidebar variant="inset" />
+          <SidebarInset>
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+                <SidebarTrigger />
+              </header>
+              <Outlet />
             </div>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-hidden">
-          <Outlet />
-        </main>
-      </div>
+          </SidebarInset>
+        </SidebarProvider>
+      </TooltipProvider>
     </RootDocument>
   )
 }

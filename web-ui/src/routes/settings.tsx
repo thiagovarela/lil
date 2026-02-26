@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { CheckCircle2, KeyRound, Loader2, Shield, XCircle } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { AuthProvider } from '@/lib/types'
 import { AuthLoginDialog } from '@/components/auth-login-dialog'
 import { Badge } from '@/components/ui/badge'
@@ -179,12 +179,7 @@ function ProviderAuthSection() {
   const [apiKeyProviderId, setApiKeyProviderId] = useState<string | null>(null)
   const [apiKeyValue, setApiKeyValue] = useState('')
 
-  // Load providers when component mounts
-  useEffect(() => {
-    loadProviders()
-  }, [loadProviders])
-
-  const loadProviders = async () => {
+  const loadProviders = useCallback(async () => {
     const client = clientManager.getClient()
     if (!client) return
 
@@ -196,7 +191,12 @@ function ProviderAuthSection() {
       console.error('Failed to load auth providers:', err)
       setProviders([])
     }
-  }
+  }, [])
+
+  // Load providers when component mounts
+  useEffect(() => {
+    loadProviders()
+  }, [loadProviders])
 
   const handleOAuthLogin = async (providerId: string) => {
     const client = clientManager.getClient()

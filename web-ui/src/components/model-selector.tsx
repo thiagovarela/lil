@@ -8,11 +8,14 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { clientManager } from '@/lib/client-manager'
 import { cn } from '@/lib/utils'
-import { sessionStore } from '@/stores/session'
+import { sessionStore, setModel, setThinkingLevel as setThinkingLevelStore } from '@/stores/session'
 
 export function ModelSelector() {
   const { sessionId, model, availableModels, thinkingLevel, isStreaming } =
@@ -39,6 +42,8 @@ export function ModelSelector() {
       try {
         const result = await client.setModel(sessionId, provider, modelId)
         console.log('[ModelSelector] Model changed successfully:', result)
+        // Immediately update the store with the returned model info
+        setModel(result)
         setIsOpen(false)
       } catch (err) {
         console.error('[ModelSelector] Failed to set model:', err)
@@ -49,7 +54,7 @@ export function ModelSelector() {
   }
 
   const handleThinkingLevelChange = async (
-    level: 'none' | 'normal' | 'extended',
+    level: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh',
   ) => {
     if (!sessionId) return
 
@@ -57,28 +62,22 @@ export function ModelSelector() {
     if (client) {
       try {
         await client.setThinkingLevel(sessionId, level)
+        // Immediately update the store
+        setThinkingLevelStore(level)
       } catch (err) {
         console.error('Failed to set thinking level:', err)
       }
     }
   }
 
-  const cycleThinkingLevel = () => {
-    const levels: Array<'none' | 'normal' | 'extended'> = [
-      'none',
-      'normal',
-      'extended',
-    ]
-    const currentIndex = levels.indexOf(thinkingLevel)
-    const nextLevel = levels[(currentIndex + 1) % levels.length]
-    handleThinkingLevelChange(nextLevel)
-  }
-
-  const thinkingLevelLabel = {
-    none: 'No thinking',
-    normal: 'Normal',
-    extended: 'Extended thinking',
-  }[thinkingLevel]
+  const thinkingLevelOptions = [
+    { value: 'off' as const, label: 'Off' },
+    { value: 'minimal' as const, label: 'Minimal' },
+    { value: 'low' as const, label: 'Low' },
+    { value: 'medium' as const, label: 'Medium' },
+    { value: 'high' as const, label: 'High' },
+    { value: 'xhigh' as const, label: 'XHigh' },
+  ]
 
   if (!model) {
     return null
@@ -90,16 +89,20 @@ export function ModelSelector() {
         type="button"
         disabled={isStreaming || !sessionId}
         className={cn(
-          'flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors',
+          'flex flex-col items-start gap-0.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors',
           'hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
-        <span className="font-medium">{model.name}</span>
-        {thinkingLevel === 'extended' && (
-          <span className="text-muted-foreground">Extended</span>
+        <div className="flex items-center gap-1.5 w-full">
+          <span className="font-medium">{model.name}</span>
+          <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />
+        </div>
+        {thinkingLevel !== 'medium' && (
+          <span className="text-xs text-muted-foreground">
+            thinking: {thinkingLevel}
+          </span>
         )}
-        <ChevronDown className="h-4 w-4 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuGroup>
@@ -133,15 +136,27 @@ export function ModelSelector() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          onClick={cycleThinkingLevel}
-          className="flex items-center justify-between"
-        >
-          <span>Thinking Level</span>
-          <span className="text-xs text-muted-foreground">
-            {thinkingLevelLabel}
-          </span>
-        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span>Thinking Level</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {thinkingLevelOptions.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => handleThinkingLevelChange(option.value)}
+                className="flex items-center gap-2"
+              >
+                <div className="flex h-5 w-5 items-center justify-center shrink-0">
+                  {thinkingLevel === option.value && (
+                    <Check className="h-4 w-4" />
+                  )}
+                </div>
+                <span>{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
   )
