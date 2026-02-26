@@ -25,9 +25,9 @@ fi
 
 # Add mise activation to .bashrc if not already there
 if ! grep -q 'mise activate bash' ~/.bashrc 2>/dev/null; then
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+  echo 'export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"' >> ~/.bashrc
   echo 'eval "$(mise activate bash)"' >> ~/.bashrc
-  info "Added mise to ~/.bashrc"
+  info "Added mise and bun to ~/.bashrc"
 fi
 
 # Activate mise shims for the current script
@@ -43,24 +43,25 @@ else
   info "bun installed ($(bun --version))"
 fi
 
-# ─── 3. Install pi via mise ──────────────────────────────────────────
+# Ensure bun global bin is in PATH
+export PATH="$HOME/.bun/bin:$PATH"
+
+# ─── 3. Install pi via bun ───────────────────────────────────────────
 if command -v pi &>/dev/null; then
   info "pi is already installed ($(pi --version 2>/dev/null || echo 'unknown'))"
 else
-  warn "Installing pi via mise…"
-  mise use --global "npm:@mariozechner/pi-coding-agent@latest"
-  eval "$(mise activate bash --shims)"
+  warn "Installing pi via bun…"
+  bun install --global @mariozechner/pi-coding-agent
   command -v pi &>/dev/null || fail "pi installation failed"
   info "pi installed ($(pi --version 2>/dev/null || echo 'unknown'))"
 fi
 
-# ─── 4. Install clankie via mise ─────────────────────────────────────
+# ─── 4. Install clankie via bun ──────────────────────────────────────
 if command -v clankie &>/dev/null; then
   info "clankie is already installed"
 else
-  warn "Installing clankie via mise…"
-  mise use --global "npm:clankie@latest"
-  eval "$(mise activate bash --shims)"
+  warn "Installing clankie via bun…"
+  bun install --global clankie
   command -v clankie &>/dev/null || fail "clankie installation failed"
   info "clankie installed"
 fi
