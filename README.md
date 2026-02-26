@@ -15,31 +15,35 @@ A minimal AI assistant that lives in Slack. Built on [pi](https://github.com/bad
 
 ### 1. Install Dependencies
 
-Requires [Bun](https://bun.sh):
+Requires [Node.js](https://nodejs.org) v24 or higher:
 
 ```bash
-# macOS/Linux
-curl -fsSL https://bun.sh/install | bash
-
-# Verify
-bun --version
+# Check Node version
+node --version  # Should be >= v24.0.0
 ```
 
-### 2. Clone and Install
+**Don't have Node.js?** Install via [mise](https://mise.jdx.dev) (recommended) or [nvm](https://github.com/nvm-sh/nvm).
+
+### 2. Quick Install via npm
+
+```bash
+npm install -g clankie
+```
+
+This installs clankie globally. Now `clankie` is available from anywhere.
+
+### 3. Or: Install from Source
 
 ```bash
 git clone https://github.com/thiagovarela/clankie
 cd clankie
-bun install
+npm install
+npm link
 ```
 
-### 3. Link Globally (Optional)
+Now `clankie` is available from anywhere. If you skip `npm link`, use `node --experimental-strip-types src/cli.ts` instead of `clankie`.
 
-```bash
-bun link
-```
-
-Now `clankie` is available from anywhere. If you skip this, use `bun run src/cli.ts` instead of `clankie`.
+**Note:** You can also use `bun install` for faster package installation, but the runtime requires Node.js v24+.
 
 ## Slack Setup
 
@@ -287,15 +291,21 @@ Logs are stored in `~/.clankie/logs/daemon.log`.
 ## Development
 
 ```bash
-# Run directly with Bun (no build step)
-bun run src/cli.ts chat
-bun run src/cli.ts send "hello"
+# Run directly with Node.js (no build step, native TypeScript support)
+node --experimental-strip-types src/cli.ts chat
+node --experimental-strip-types src/cli.ts send "hello"
+
+# Or use npm scripts
+npm run dev -- chat
+npm run dev -- send "hello"
 
 # Code quality checks
-bun run check        # Run linter
-bun run check:fix    # Auto-fix issues
-bun run format       # Format code
+npm run check        # Run linter
+npm run check:fix    # Auto-fix issues
+npm run format       # Format code
 ```
+
+**Note:** You can use `bun install` for faster package installation, but the runtime requires Node.js v24+ with native TypeScript support.
 
 ## Troubleshooting
 
