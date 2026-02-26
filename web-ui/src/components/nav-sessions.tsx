@@ -19,7 +19,7 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import { removeSession, sessionsListStore } from "@/stores/sessions-list";
+import { getSortedSessions, removeSession, sessionsListStore } from "@/stores/sessions-list";
 
 export function NavRecentSessions() {
 	const navigate = useNavigate();
@@ -37,8 +37,8 @@ export function NavRecentSessions() {
 		removeSession(sessionId);
 	};
 
-	// Show only last 5 sessions
-	const recentSessions = (sessions || []).slice(0, 15);
+	// Show only last 15 sessions, sorted by most recent
+	const recentSessions = getSortedSessions(sessions || []).slice(0, 15);
 
 	return (
 		<SidebarGroup className="group-data-[collapsible=icon]:hidden">
