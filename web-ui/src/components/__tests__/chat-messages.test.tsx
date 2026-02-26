@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { addUserMessage, startAssistantMessage, appendStreamToken, endAssistantMessage } from "@/stores/messages";
+import { addUserMessage, appendStreamToken, endAssistantMessage, startAssistantMessage } from "@/stores/messages";
 import { ChatMessages } from "../chat-messages";
 
 describe("ChatMessages", () => {

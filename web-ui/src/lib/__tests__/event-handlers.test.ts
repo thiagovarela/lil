@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { authStore } from "@/stores/auth";
+import { messagesStore } from "@/stores/messages";
+import { sessionStore } from "@/stores/session";
+import { sessionsListStore } from "@/stores/sessions-list";
 import {
 	makeAgentEndEvent,
 	makeAgentStartEvent,
@@ -18,10 +22,6 @@ import {
 	makeThinkingLevelChangedEvent,
 } from "@/test/fixtures";
 import { handleAuthEvent, handleSessionEvent } from "../event-handlers";
-import { authStore } from "@/stores/auth";
-import { messagesStore } from "@/stores/messages";
-import { sessionStore } from "@/stores/session";
-import { sessionsListStore } from "@/stores/sessions-list";
 
 describe("event-handlers", () => {
 	describe("handleSessionEvent", () => {
@@ -367,11 +367,7 @@ describe("event-handlers", () => {
 			});
 
 			it("auto_compaction_start sets isCompacting to true if active", () => {
-				handleSessionEvent(
-					"session-1",
-					{ type: "auto_compaction_start", reason: "too many messages" },
-					"session-1",
-				);
+				handleSessionEvent("session-1", { type: "auto_compaction_start", reason: "too many messages" }, "session-1");
 
 				expect(sessionStore.state.isCompacting).toBe(true);
 			});
@@ -384,11 +380,7 @@ describe("event-handlers", () => {
 			});
 
 			it("auto_compaction_end sets isCompacting to false if active", () => {
-				handleSessionEvent(
-					"session-1",
-					{ type: "auto_compaction_start", reason: "too many messages" },
-					"session-1",
-				);
+				handleSessionEvent("session-1", { type: "auto_compaction_start", reason: "too many messages" }, "session-1");
 				handleSessionEvent(
 					"session-1",
 					{

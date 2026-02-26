@@ -8,6 +8,8 @@
  *
  * On Linux:  installs a systemd user service (~/.config/systemd/user/clankie.service)
  * On macOS:  installs a launchd user agent (~/Library/LaunchAgents/ai.clankie.daemon.plist)
+ *
+ * Note: Requires Node 24+ for native TypeScript execution.
  */
 
 import { execSync } from "node:child_process";
@@ -37,7 +39,7 @@ function resolveProgramArguments(): string[] {
 		// Compiled binary
 		return [process.argv[0], "start", "--foreground"];
 	}
-	// Running from source with bun
+	// Running from source with Node.js (TypeScript files)
 	return [process.argv[0], process.argv[1], "start", "--foreground"];
 }
 

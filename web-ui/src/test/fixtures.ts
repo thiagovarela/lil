@@ -2,14 +2,7 @@
  * Test data factories
  */
 
-import type {
-	AgentSessionEvent,
-	AuthEvent,
-	AuthProvider,
-	ModelInfo,
-	SessionState,
-	ThinkingLevel,
-} from "@/lib/types";
+import type { AgentSessionEvent, AuthEvent, AuthProvider, ModelInfo, SessionState, ThinkingLevel } from "@/lib/types";
 import type { DisplayMessage } from "@/stores/messages";
 import type { SessionListItem } from "@/stores/sessions-list";
 
@@ -155,7 +148,9 @@ export function makeThinkingLevelChangedEvent(
 	};
 }
 
-export function makeSessionNameChangedEvent(name: string): Extract<AgentSessionEvent, { type: "session_name_changed" }> {
+export function makeSessionNameChangedEvent(
+	name: string,
+): Extract<AgentSessionEvent, { type: "session_name_changed" }> {
 	return {
 		type: "session_name_changed",
 		name,

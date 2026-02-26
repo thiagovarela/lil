@@ -46,6 +46,7 @@ export interface SlackChannelOptions {
 
 export class SlackChannel implements Channel {
 	readonly name = "slack";
+	private options: SlackChannelOptions;
 	private socketClient: SocketModeClient;
 	private webClient: WebClient;
 	private allowedUsers: Set<string>;
@@ -55,7 +56,8 @@ export class SlackChannel implements Channel {
 	/** Threads where bot has been @mentioned - Map<threadId, timestamp> for TTL cleanup */
 	private activeThreads: Map<string, number> = new Map();
 
-	constructor(private options: SlackChannelOptions) {
+	constructor(options: SlackChannelOptions) {
+		this.options = options;
 		this.socketClient = new SocketModeClient({
 			appToken: options.appToken,
 			// biome-ignore lint/suspicious/noExplicitAny: Slack SDK logLevel type is not exported

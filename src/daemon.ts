@@ -134,7 +134,7 @@ async function processMessage(
 				return;
 			}
 
-			const currentSession = activeSessionNames.get(chatIdentifier) ?? "default";
+			const currentSession = getActiveSessionName(chatIdentifier);
 			const sessionList = chatSessions
 				.map((name) => (name === currentSession ? `• ${name} ✓ (active)` : `• ${name}`))
 				.join("\n");
@@ -149,7 +149,7 @@ async function processMessage(
 
 		// Handle /new command — reset current session
 		if (trimmed === "/new") {
-			const session = await getOrCreateSession(chatKey, config, personaName);
+			const session = await getOrCreateSession(chatKey, config);
 			await session.newSession();
 			console.log(`[daemon] Session reset for ${chatKey}`);
 			await channel.send(

@@ -20,7 +20,7 @@ fi
 
 # Build web-ui and copy to web-ui-dist/
 echo "==> Building web-ui…"
-bun run build:web-ui
+npm run build:web-ui
 echo "==> Web-ui bundled into web-ui-dist/"
 
 # Bump version (updates package.json and creates git tag)
@@ -64,10 +64,10 @@ fi
 
 # Install & build
 echo "==> Installing web-ui dependencies…"
-(cd web-ui && bun install --frozen-lockfile)
+(cd web-ui && npm ci)
 
 echo "==> Building web-ui…"
-(cd web-ui && bun run build)
+(cd web-ui && npm run build)
 
 # Package
 echo "==> Packaging .output → ${TARBALL}…"

@@ -11,11 +11,15 @@
 
 import * as crypto from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import type { Server } from "node:http";
+import { join, resolve } from "node:path";
+import { serve } from "@hono/node-server";
+import { createNodeWebSocket } from "@hono/node-ws";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { ImageContent, OAuthLoginCallbacks } from "@mariozechner/pi-ai";
 import { type AgentSession, type AgentSessionEvent, AuthStorage } from "@mariozechner/pi-coding-agent";
-import type { ServerWebSocket } from "bun";
+import { Hono } from "hono";
+import type { WSContext } from "hono/ws";
 import { getAppDir, getAuthPath, loadConfig } from "../config.ts";
 import { getOrCreateSession } from "../sessions.ts";
 import type { Channel, MessageHandler } from "./channel.ts";
@@ -132,19 +136,15 @@ type RpcExtensionUIResponse =
 	| { type: "extension_ui_response"; id: string; confirmed: boolean }
 	| { type: "extension_ui_response"; id: string; cancelled: true };
 
-interface ConnectionData {
-	authenticated: boolean;
-}
-
 // ─── WebChannel ────────────────────────────────────────────────────────────────
 
 export class WebChannel implements Channel {
 	readonly name = "web";
 	private options: WebChannelOptions;
-	private server: ReturnType<typeof Bun.serve> | null = null;
+	private server: Server | null = null;
 
 	/** Map of sessionId → Set of WebSocket connections subscribed to that session */
-	private sessionSubscriptions = new Map<string, Set<ServerWebSocket<ConnectionData>>>();
+	private sessionSubscriptions = new Map<string, Set<WSContext>>();
 
 	/** Map of sessionId → AgentSession */
 	private sessions = new Map<string, AgentSession>();
@@ -153,13 +153,13 @@ export class WebChannel implements Channel {
 	private sessionUnsubscribers = new Map<string, () => void>();
 
 	/** Pending extension UI requests: Map<requestId, { sessionId, ws }> */
-	private pendingExtensionRequests = new Map<string, { sessionId: string; ws: ServerWebSocket<ConnectionData> }>();
+	private pendingExtensionRequests = new Map<string, { sessionId: string; ws: WSContext }>();
 
 	/** Pending auth login flows: Map<loginFlowId, { ws, inputResolver, abortController }> */
 	private pendingLoginFlows = new Map<
 		string,
 		{
-			ws: ServerWebSocket<ConnectionData>;
+			ws: WSContext;
 			inputResolver: ((value: string) => void) | null;
 			abortController: AbortController;
 		}
@@ -169,94 +169,210 @@ export class WebChannel implements Channel {
 		this.options = options;
 	}
 
-	async start(handler: MessageHandler): Promise<void> {
-		this.handler = handler;
+	async start(_handler: MessageHandler): Promise<void> {
+		const app = new Hono();
 
-		this.server = Bun.serve({
-			port: this.options.port,
-			websocket: {
-				open: (ws) => this.handleOpen(ws),
-				message: (ws, message) => this.handleMessage(ws, message),
-				close: (ws) => this.handleClose(ws),
-			},
-			fetch: (req, server) => {
-				const isWebSocket = req.headers.get("Upgrade")?.toLowerCase() === "websocket";
+		// Create WebSocket adapter
+		const { injectWebSocket, upgradeWebSocket: wsUpgrade } = createNodeWebSocket({ app });
 
-				// ─── WebSocket upgrade path ───────────────────────────────────────
+		// ─── WebSocket route ──────────────────────────────────────────────────
 
-				if (isWebSocket) {
-					// Validate auth token from Authorization header or URL query param
-					const authHeader = req.headers.get("Authorization");
-					const headerToken = authHeader?.replace(/^Bearer\s+/i, "");
+		app.get(
+			"/ws",
+			wsUpgrade((c) => {
+				// Validate auth token from Authorization header or URL query param
+				const authHeader = c.req.header("Authorization");
+				const headerToken = authHeader?.replace(/^Bearer\s+/i, "");
+				const queryToken = c.req.query("token");
 
-					// Also check URL query param (for browser WebSocket clients that can't send headers)
-					const url = new URL(req.url, `http://${req.headers.get("host")}`);
-					const queryToken = url.searchParams.get("token");
+				const token = headerToken || queryToken;
 
-					const token = headerToken || queryToken;
-
-					if (token !== this.options.authToken) {
-						return new Response("Unauthorized", { status: 401 });
-					}
-
-					// ─── Origin validation ────────────────────────────────────────
-
-					// When staticDir is set, enforce same-origin by comparing Origin vs Host
-					if (this.options.staticDir) {
-						const origin = req.headers.get("Origin");
-						const host = req.headers.get("Host");
-
-						if (!origin || !host) {
-							return new Response("Forbidden - missing headers", { status: 403 });
-						}
-
-						try {
-							const originHost = new URL(origin).host;
-							// Compare hostnames (ignoring scheme — reverse proxy handles TLS)
-							if (originHost !== host) {
-								console.warn(`[web] Blocked cross-origin WebSocket: origin=${origin}, host=${host}`);
-								return new Response("Forbidden - cross-origin not allowed", { status: 403 });
-							}
-						} catch (err) {
-							console.error("[web] Invalid Origin header:", err);
-							return new Response("Forbidden - invalid origin", { status: 403 });
-						}
-					}
-					// Legacy allowedOrigins check (still works as override when staticDir is not set)
-					else if (this.options.allowedOrigins && this.options.allowedOrigins.length > 0) {
-						const origin = req.headers.get("Origin");
-						if (!origin || !this.options.allowedOrigins.includes(origin)) {
-							return new Response("Forbidden", { status: 403 });
-						}
-					}
-
-					// Upgrade to WebSocket
-					const upgraded = server.upgrade(req, {
-						data: { authenticated: true } as ConnectionData,
-					});
-
-					if (!upgraded) {
-						return new Response("WebSocket upgrade failed", { status: 400 });
-					}
-
-					// biome-ignore lint/suspicious/noExplicitAny: Bun requires undefined return after upgrade
-					return undefined as any; // upgrade successful
+				if (token !== this.options.authToken) {
+					return c.text("Unauthorized", 401);
 				}
 
-				// ─── Static file serving path ─────────────────────────────────────
+				// ─── Origin validation ────────────────────────────────────────
 
+				// When staticDir is set, enforce same-origin by comparing Origin vs Host
 				if (this.options.staticDir) {
-					return this.serveStaticFile(req);
+					const origin = c.req.header("Origin");
+					const host = c.req.header("Host");
+
+					if (!origin || !host) {
+						return c.text("Forbidden - missing headers", 403);
+					}
+
+					try {
+						const originHost = new URL(origin).host;
+						// Compare hostnames (ignoring scheme — reverse proxy handles TLS)
+						if (originHost !== host) {
+							console.warn(`[web] Blocked cross-origin WebSocket: origin=${origin}, host=${host}`);
+							return c.text("Forbidden - cross-origin not allowed", 403);
+						}
+					} catch (err) {
+						console.error("[web] Invalid Origin header:", err);
+						return c.text("Forbidden - invalid origin", 403);
+					}
+				}
+				// Legacy allowedOrigins check (still works as override when staticDir is not set)
+				else if (this.options.allowedOrigins && this.options.allowedOrigins.length > 0) {
+					const origin = c.req.header("Origin");
+					if (!origin || !this.options.allowedOrigins.includes(origin)) {
+						return c.text("Forbidden", 403);
+					}
 				}
 
-				// ─── No static dir configured — reject non-WebSocket requests ─────
+				// Return WebSocket handlers
+				return {
+					onOpen: (_evt, _ws) => {
+						console.log("[web] Client connected");
+					},
+					onMessage: async (evt, ws) => {
+						try {
+							const text = typeof evt.data === "string" ? evt.data : evt.data.toString();
+							const parsed = JSON.parse(text);
 
-				return new Response("Upgrade Required - this endpoint only accepts WebSocket connections", {
-					status: 426,
-					headers: { Upgrade: "websocket" },
+							// Handle extension UI responses
+							if (parsed.type === "extension_ui_response") {
+								this.handleExtensionUIResponse(parsed as RpcExtensionUIResponse);
+								return;
+							}
+
+							// Handle RPC commands
+							const inbound = parsed as InboundWebMessage;
+							await this.handleCommand(ws, inbound);
+						} catch (err) {
+							console.error("[web] Error handling message:", err);
+							this.sendError(
+								ws,
+								undefined,
+								"parse",
+								`Failed to parse message: ${err instanceof Error ? err.message : String(err)}`,
+							);
+						}
+					},
+					onClose: (_evt, ws) => {
+						console.log("[web] Client disconnected");
+
+						// Remove this connection from all session subscriptions
+						for (const [sessionId, subscribers] of this.sessionSubscriptions.entries()) {
+							subscribers.delete(ws);
+							if (subscribers.size === 0) {
+								this.sessionSubscriptions.delete(sessionId);
+							}
+						}
+					},
+				};
+			}),
+		);
+
+		// ─── Static file serving ──────────────────────────────────────────────
+
+		if (this.options.staticDir) {
+			app.get("*", async (c) => {
+				try {
+					let pathname = c.req.path;
+
+					// Remove leading slash
+					if (pathname.startsWith("/")) {
+						pathname = pathname.substring(1);
+					}
+
+					// Default to index for root
+					if (pathname === "" || pathname === "/") {
+						pathname = "_shell.html";
+					}
+
+					// Try to serve the requested file
+					const _filePath = join(this.options.staticDir!, pathname);
+
+					// Security: ensure the resolved path is within staticDir (prevent directory traversal)
+					const resolvedPath = resolve(this.options.staticDir!, pathname);
+					if (!resolvedPath.startsWith(resolve(this.options.staticDir!))) {
+						return c.text("Forbidden", 403);
+					}
+
+					// Check if file exists
+					if (existsSync(resolvedPath) && statSync(resolvedPath).isFile()) {
+						const content = readFileSync(resolvedPath);
+
+						// Determine Content-Type from extension
+						const ext = pathname.split(".").pop()?.toLowerCase();
+						const contentTypes: Record<string, string> = {
+							html: "text/html",
+							js: "application/javascript",
+							css: "text/css",
+							json: "application/json",
+							png: "image/png",
+							jpg: "image/jpeg",
+							jpeg: "image/jpeg",
+							gif: "image/gif",
+							svg: "image/svg+xml",
+							webp: "image/webp",
+							woff: "font/woff",
+							woff2: "font/woff2",
+							ttf: "font/ttf",
+							ico: "image/x-icon",
+						};
+
+						const contentType = contentTypes[ext || ""] || "application/octet-stream";
+
+						// Set caching headers for hashed assets
+						const cacheControl = pathname.startsWith("assets/")
+							? "public, max-age=31536000, immutable"
+							: "public, max-age=3600";
+
+						return new Response(content, {
+							headers: {
+								"Content-Type": contentType,
+								"Cache-Control": cacheControl,
+							},
+						});
+					}
+
+					// SPA fallback: serve _shell.html for non-file routes
+					const shellPath = join(this.options.staticDir!, "_shell.html");
+					if (existsSync(shellPath)) {
+						const content = readFileSync(shellPath);
+						return new Response(content, {
+							headers: {
+								"Content-Type": "text/html",
+								"Cache-Control": "no-cache",
+							},
+						});
+					}
+
+					return c.text("Not Found", 404);
+				} catch (err) {
+					console.error("[web] Error serving static file:", err);
+					return c.text("Internal Server Error", 500);
+				}
+			});
+		} else {
+			// No static dir — reject non-WebSocket requests
+			app.get("*", (c) => {
+				return c.text("Upgrade Required - this endpoint only accepts WebSocket connections", 426, {
+					Upgrade: "websocket",
 				});
-			},
+			});
+		}
+
+		// ─── Start server ─────────────────────────────────────────────────────
+
+		const serverInfo = await new Promise<{ address: string; port: number; server: Server }>((resolve) => {
+			const _info = serve(
+				{
+					fetch: app.fetch,
+					port: this.options.port,
+				},
+				(info) => {
+					resolve(info as { address: string; port: number; server: Server });
+				},
+			);
 		});
+
+		this.server = serverInfo.server;
+		injectWebSocket(this.server);
 
 		console.log(`[web] WebSocket server listening on port ${this.options.port}`);
 		console.log(`[web] Open in browser: http://localhost:${this.options.port}?token=${this.options.authToken}`);
@@ -268,7 +384,9 @@ export class WebChannel implements Channel {
 
 	async stop(): Promise<void> {
 		if (this.server) {
-			this.server.stop();
+			await new Promise<void>((resolve) => {
+				this.server?.close(() => resolve());
+			});
 			this.server = null;
 		}
 
@@ -282,54 +400,9 @@ export class WebChannel implements Channel {
 		console.log("[web] WebSocket server stopped");
 	}
 
-	// ─── WebSocket handlers ────────────────────────────────────────────────────
-
-	private handleOpen(_ws: ServerWebSocket<ConnectionData>): void {
-		console.log("[web] Client connected");
-	}
-
-	private async handleMessage(ws: ServerWebSocket<ConnectionData>, message: string | Buffer): Promise<void> {
-		try {
-			const text = typeof message === "string" ? message : message.toString("utf-8");
-			const parsed = JSON.parse(text);
-
-			// Handle extension UI responses
-			if (parsed.type === "extension_ui_response") {
-				this.handleExtensionUIResponse(parsed as RpcExtensionUIResponse);
-				return;
-			}
-
-			// Handle RPC commands
-			const inbound = parsed as InboundWebMessage;
-			await this.handleCommand(ws, inbound);
-		} catch (err) {
-			console.error("[web] Error handling message:", err);
-			this.sendError(
-				ws,
-				undefined,
-				"parse",
-				`Failed to parse message: ${err instanceof Error ? err.message : String(err)}`,
-			);
-		}
-	}
-
-	private handleClose(ws: ServerWebSocket<ConnectionData>): void {
-		console.log("[web] Client disconnected");
-
-		// Remove this connection from all session subscriptions
-		for (const [sessionId, subscribers] of this.sessionSubscriptions.entries()) {
-			subscribers.delete(ws);
-			if (subscribers.size === 0) {
-				this.sessionSubscriptions.delete(sessionId);
-				// Optionally unsubscribe from session events if no one is listening
-				// But keep the session alive for reconnection
-			}
-		}
-	}
-
 	// ─── Command handling ──────────────────────────────────────────────────────
 
-	private async handleCommand(ws: ServerWebSocket<ConnectionData>, inbound: InboundWebMessage): Promise<void> {
+	private async handleCommand(ws: WSContext, inbound: InboundWebMessage): Promise<void> {
 		const command = inbound.command;
 		const commandId = command.id;
 
@@ -827,11 +900,7 @@ export class WebChannel implements Channel {
 
 	// ─── Auth command handling ─────────────────────────────────────────────────
 
-	private async handleAuthCommand(
-		ws: ServerWebSocket<ConnectionData>,
-		command: RpcCommand,
-		commandId?: string,
-	): Promise<void> {
+	private async handleAuthCommand(ws: WSContext, command: RpcCommand, commandId?: string): Promise<void> {
 		const authStorage = AuthStorage.create(getAuthPath());
 
 		try {
@@ -1061,7 +1130,7 @@ export class WebChannel implements Channel {
 		}
 	}
 
-	private sendAuthEvent(ws: ServerWebSocket<ConnectionData>, _loginFlowId: string, event: AuthEvent): void {
+	private sendAuthEvent(ws: WSContext, _loginFlowId: string, event: AuthEvent): void {
 		const message: OutboundWebMessage = {
 			sessionId: "_auth",
 			event,
@@ -1069,7 +1138,7 @@ export class WebChannel implements Channel {
 		ws.send(JSON.stringify(message));
 	}
 
-	private sendAuthResponse(ws: ServerWebSocket<ConnectionData>, response: RpcResponse): void {
+	private sendAuthResponse(ws: WSContext, response: RpcResponse): void {
 		const message: OutboundWebMessage = {
 			sessionId: "_auth",
 			event: response,
@@ -1079,7 +1148,7 @@ export class WebChannel implements Channel {
 
 	// ─── Session subscription ──────────────────────────────────────────────────
 
-	private subscribeToSessionWithKey(chatKey: string, session: AgentSession, ws: ServerWebSocket<ConnectionData>): void {
+	private subscribeToSessionWithKey(chatKey: string, session: AgentSession, ws: WSContext): void {
 		// Track session with the chatKey (web_xxx)
 		this.sessions.set(chatKey, session);
 
@@ -1169,8 +1238,10 @@ export class WebChannel implements Channel {
 					const entry = JSON.parse(lines[i]);
 					if (entry.type === "message" && entry.message?.role === "user") {
 						// Extract text content
+						// biome-ignore lint/suspicious/noExplicitAny: Parsing opaque JSONL session data
 						const textContent = entry.message.content
 							?.filter((c: any) => c.type === "text")
+							// biome-ignore lint/suspicious/noExplicitAny: Parsing opaque JSONL session data
 							.map((c: any) => c.text)
 							.join(" ");
 						if (textContent) {
@@ -1234,8 +1305,10 @@ export class WebChannel implements Channel {
 						if (typeof lastUserMessage.content === "string") {
 							title = lastUserMessage.content.substring(0, 100);
 						} else if (Array.isArray(lastUserMessage.content)) {
+							// biome-ignore lint/suspicious/noExplicitAny: Filtering message content union type
 							const textContent = lastUserMessage.content
 								.filter((c: any) => c.type === "text")
+								// biome-ignore lint/suspicious/noExplicitAny: Filtering message content union type
 								.map((c: any) => c.text)
 								.join(" ");
 							title = textContent?.substring(0, 100) || inMemorySession.sessionName;
@@ -1269,11 +1342,7 @@ export class WebChannel implements Channel {
 		return sessions;
 	}
 
-	private sendResponse(
-		ws: ServerWebSocket<ConnectionData>,
-		sessionId: string | undefined,
-		response: RpcResponse,
-	): void {
+	private sendResponse(ws: WSContext, sessionId: string | undefined, response: RpcResponse): void {
 		if (!sessionId) {
 			// Special case for responses without session context
 			ws.send(JSON.stringify(response));
@@ -1285,7 +1354,7 @@ export class WebChannel implements Channel {
 	}
 
 	private sendError(
-		ws: ServerWebSocket<ConnectionData>,
+		ws: WSContext,
 		sessionId: string | undefined,
 		command: string,
 		error: string,
@@ -1299,70 +1368,5 @@ export class WebChannel implements Channel {
 			error,
 		};
 		this.sendResponse(ws, sessionId, response);
-	}
-
-	// ─── Static file serving ───────────────────────────────────────────────────
-
-	private async serveStaticFile(req: Request): Promise<Response> {
-		if (!this.options.staticDir) {
-			return new Response("Not Found", { status: 404 });
-		}
-
-		try {
-			const url = new URL(req.url);
-			let pathname = url.pathname;
-
-			// Remove leading slash
-			if (pathname.startsWith("/")) {
-				pathname = pathname.substring(1);
-			}
-
-			// Default to index for root
-			if (pathname === "" || pathname === "/") {
-				pathname = "_shell.html";
-			}
-
-			// Try to serve the requested file
-			const filePath = join(this.options.staticDir, pathname);
-
-			// Security: ensure the resolved path is within staticDir (prevent directory traversal)
-			const { resolve } = await import("node:path");
-			const resolvedPath = resolve(this.options.staticDir, pathname);
-			if (!resolvedPath.startsWith(resolve(this.options.staticDir))) {
-				return new Response("Forbidden", { status: 403 });
-			}
-
-			// Check if file exists
-			if (existsSync(resolvedPath) && statSync(resolvedPath).isFile()) {
-				const file = Bun.file(resolvedPath);
-
-				// Set caching headers for hashed assets
-				const headers = new Headers();
-				if (pathname.startsWith("assets/")) {
-					headers.set("Cache-Control", "public, max-age=31536000, immutable");
-				} else {
-					headers.set("Cache-Control", "public, max-age=3600");
-				}
-
-				return new Response(file, { headers });
-			}
-
-			// SPA fallback: serve _shell.html for non-file routes
-			const shellPath = join(this.options.staticDir, "_shell.html");
-			if (existsSync(shellPath)) {
-				const file = Bun.file(shellPath);
-				return new Response(file, {
-					headers: {
-						"Content-Type": "text/html",
-						"Cache-Control": "no-cache",
-					},
-				});
-			}
-
-			return new Response("Not Found", { status: 404 });
-		} catch (err) {
-			console.error("[web] Error serving static file:", err);
-			return new Response("Internal Server Error", { status: 500 });
-		}
 	}
 }

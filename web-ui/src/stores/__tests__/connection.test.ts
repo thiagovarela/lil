@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConnectionState } from "@/lib/ws-client";
-import {
-	connectionStore,
-	resetConnectionError,
-	updateConnectionSettings,
-	updateConnectionStatus,
-} from "../connection";
+import { connectionStore, resetConnectionError, updateConnectionSettings, updateConnectionStatus } from "../connection";
 
 describe("connection store", () => {
 	describe("updateConnectionSettings", () => {
