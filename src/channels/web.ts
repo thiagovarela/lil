@@ -788,14 +788,18 @@ export class WebChannel implements Channel {
 
 			case "get_extensions": {
 				const extensionsResult = session.resourceLoader.getExtensions();
-				const extensions = extensionsResult.extensions.map((ext) => ({
-					path: ext.path,
-					resolvedPath: ext.resolvedPath,
-					tools: Array.from(ext.tools.keys()),
-					commands: Array.from(ext.commands.keys()),
-					flags: Array.from(ext.flags.keys()),
-					shortcuts: Array.from(ext.shortcuts.keys()),
-				}));
+				// Filter out inline extensions (created programmatically, like workspace-jail)
+				// They have paths like '<inline:1>' and typically don't expose user-facing tools
+				const extensions = extensionsResult.extensions
+					.filter((ext) => !ext.path.startsWith("<inline:"))
+					.map((ext) => ({
+						path: ext.path,
+						resolvedPath: ext.resolvedPath,
+						tools: Array.from(ext.tools.keys()),
+						commands: Array.from(ext.commands.keys()),
+						flags: Array.from(ext.flags.keys()),
+						shortcuts: Array.from(ext.shortcuts.keys()),
+					}));
 
 				return {
 					id,
