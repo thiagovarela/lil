@@ -30,6 +30,7 @@ clankie start
 ```
 
 You should see output like:
+
 ```
 [daemon] Channels: slack, web
 [web] WebSocket server listening on port 3100
@@ -107,6 +108,7 @@ bun run check
 **Issue**: Browser WebSocket API doesn't support custom headers (like `Authorization: Bearer <token>`).
 
 **Current workaround**: The client is designed to connect without auth headers. This will require an update to clankie's `src/channels/web.ts` to support one of:
+
 1. Auth token in URL query parameter (`ws://localhost:3100?token=xxx`)
 2. Auth token in first message after connection
 3. Cookie-based auth

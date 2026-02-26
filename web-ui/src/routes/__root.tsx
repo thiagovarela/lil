@@ -1,101 +1,106 @@
-import { createRootRoute, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
-import { MessageSquare, Puzzle, Settings } from "lucide-react";
-import { useEffect } from "react";
-import { ConnectionStatus } from "@/components/connection-status";
-import { clientManager } from "@/lib/client-manager";
-import { connectionStore } from "@/stores/connection";
-
-import appCss from "../styles.css?url";
+import {
+  HeadContent,
+  Link,
+  Outlet,
+  Scripts,
+  createRootRoute,
+} from '@tanstack/react-router'
+import { MessageSquare, Puzzle, Settings } from 'lucide-react'
+import { useEffect } from 'react'
+import appCss from '../styles.css?url'
+import { ConnectionStatus } from '@/components/connection-status'
+import { clientManager } from '@/lib/client-manager'
+import { connectionStore } from '@/stores/connection'
 
 export const Route = createRootRoute({
-	head: () => ({
-		meta: [
-			{
-				charSet: "utf-8",
-			},
-			{
-				name: "viewport",
-				content: "width=device-width, initial-scale=1",
-			},
-			{
-				title: "clankie — Web UI",
-			},
-		],
-		links: [
-			{
-				rel: "stylesheet",
-				href: appCss,
-			},
-		],
-	}),
+  head: () => ({
+    meta: [
+      {
+        charSet: 'utf-8',
+      },
+      {
+        name: 'viewport',
+        content: 'width=device-width, initial-scale=1',
+      },
+      {
+        title: 'clankie — Web UI',
+      },
+    ],
+    links: [
+      {
+        rel: 'stylesheet',
+        href: appCss,
+      },
+    ],
+  }),
 
-	component: RootComponent,
-});
+  component: RootComponent,
+})
 
 function RootComponent() {
-	// Auto-connect on startup if saved credentials exist
-	useEffect(() => {
-		const { settings } = connectionStore.state;
-		if (settings.authToken && !clientManager.isConnected()) {
-			clientManager.connect();
-		}
-	}, []);
+  // Auto-connect on startup if saved credentials exist
+  useEffect(() => {
+    const { settings } = connectionStore.state
+    if (settings.authToken && !clientManager.isConnected()) {
+      clientManager.connect()
+    }
+  }, [])
 
-	return (
-		<RootDocument>
-			<div className="flex h-screen flex-col">
-				<header className="border-b border-border bg-card">
-					<div className="flex h-14 items-center gap-4 px-4">
-						<h1 className="text-lg font-semibold">clankie</h1>
+  return (
+    <RootDocument>
+      <div className="flex h-screen flex-col">
+        <header className="border-b border-border bg-card">
+          <div className="flex h-14 items-center gap-4 px-4">
+            <h1 className="text-lg font-semibold">clankie</h1>
 
-						<nav className="flex gap-2">
-							<Link
-								to="/"
-								className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
-							>
-								<MessageSquare className="h-4 w-4" />
-								Chat
-							</Link>
-							<Link
-								to="/extensions"
-								className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
-							>
-								<Puzzle className="h-4 w-4" />
-								Extensions & Skills
-							</Link>
-							<Link
-								to="/settings"
-								className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
-							>
-								<Settings className="h-4 w-4" />
-								Settings
-							</Link>
-						</nav>
+            <nav className="flex gap-2">
+              <Link
+                to="/"
+                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
+              >
+                <MessageSquare className="h-4 w-4" />
+                Chat
+              </Link>
+              <Link
+                to="/extensions"
+                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
+              >
+                <Puzzle className="h-4 w-4" />
+                Extensions & Skills
+              </Link>
+              <Link
+                to="/settings"
+                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent [&.active]:bg-accent"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            </nav>
 
-						<div className="ml-auto">
-							<ConnectionStatus />
-						</div>
-					</div>
-				</header>
+            <div className="ml-auto">
+              <ConnectionStatus />
+            </div>
+          </div>
+        </header>
 
-				<main className="flex-1 overflow-hidden">
-					<Outlet />
-				</main>
-			</div>
-		</RootDocument>
-	);
+        <main className="flex-1 overflow-hidden">
+          <Outlet />
+        </main>
+      </div>
+    </RootDocument>
+  )
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-	return (
-		<html lang="en" className="dark">
-			<head>
-				<HeadContent />
-			</head>
-			<body>
-				{children}
-				<Scripts />
-			</body>
-		</html>
-	);
+  return (
+    <html lang="en" className="dark">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  )
 }
