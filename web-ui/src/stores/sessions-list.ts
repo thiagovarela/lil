@@ -10,6 +10,7 @@ export interface SessionListItem {
 	title?: string;
 	messageCount: number;
 	createdAt: number;
+	updatedAt?: number; // When the session was last accessed
 }
 
 export interface SessionsListStore {
@@ -53,9 +54,14 @@ export function removeSession(sessionId: string): void {
 
 export function setActiveSession(sessionId: string): void {
 	console.log(`[sessions-list] Setting active session: ${sessionId}`);
+	const now = Date.now();
 	sessionsListStore.setState((state) => ({
 		...state,
 		activeSessionId: sessionId,
+		// Update the session's updatedAt timestamp
+		sessions: state.sessions.map((s) =>
+			s.sessionId === sessionId ? { ...s, updatedAt: now } : s
+		),
 	}));
 }
 
@@ -72,4 +78,17 @@ export function updateSessionMeta(
 export function clearSessions(): void {
 	console.log("[sessions-list] Clearing all sessions");
 	sessionsListStore.setState(() => INITIAL_STATE);
+}
+
+// ─── Selectors ─────────────────────────────────────────────────────────────────
+
+/**
+ * Get sessions sorted by most recent (updatedAt or createdAt)
+ */
+export function getSortedSessions(sessions: SessionListItem[]): SessionListItem[] {
+	return [...sessions].sort((a, b) => {
+		const aTime = a.updatedAt ?? a.createdAt;
+		const bTime = b.updatedAt ?? b.createdAt;
+		return bTime - aTime; // Descending order (most recent first)
+	});
 }

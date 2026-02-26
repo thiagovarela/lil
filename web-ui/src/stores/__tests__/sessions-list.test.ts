@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { makeSessionListItem } from "@/test/fixtures";
 import {
 	addSession,
 	clearSessions,
+	getSortedSessions,
 	removeSession,
 	sessionsListStore,
 	setActiveSession,
@@ -171,6 +172,91 @@ describe("sessions-list store", () => {
 				sessions: [],
 				activeSessionId: null,
 			});
+		});
+	});
+
+	describe("setActiveSession with updatedAt", () => {
+		it("updates the updatedAt timestamp when setting active session", () => {
+			const now = Date.now();
+			vi.setSystemTime(now);
+
+			addSession(makeSessionListItem({ sessionId: "session-1" }));
+			setActiveSession("session-1");
+
+			const { sessions } = sessionsListStore.state;
+			expect(sessions[0].updatedAt).toBe(now);
+
+			vi.useRealTimers();
+		});
+
+		it("updates updatedAt each time session becomes active", () => {
+			const time1 = Date.now();
+			vi.setSystemTime(time1);
+
+			addSession(makeSessionListItem({ sessionId: "session-1" }));
+			setActiveSession("session-1");
+
+			const time2 = time1 + 5000;
+			vi.setSystemTime(time2);
+			setActiveSession("session-1");
+
+			const { sessions } = sessionsListStore.state;
+			expect(sessions[0].updatedAt).toBe(time2);
+
+			vi.useRealTimers();
+		});
+	});
+
+	describe("getSortedSessions", () => {
+		it("sorts sessions by updatedAt (most recent first)", () => {
+			const sessions = [
+				makeSessionListItem({ sessionId: "old", createdAt: 1000, updatedAt: 1000 }),
+				makeSessionListItem({ sessionId: "newest", createdAt: 2000, updatedAt: 3000 }),
+				makeSessionListItem({ sessionId: "middle", createdAt: 1500, updatedAt: 2000 }),
+			];
+
+			const sorted = getSortedSessions(sessions);
+
+			expect(sorted.map((s) => s.sessionId)).toEqual(["newest", "middle", "old"]);
+		});
+
+		it("falls back to createdAt if updatedAt is missing", () => {
+			const sessions = [
+				makeSessionListItem({ sessionId: "older", createdAt: 1000 }),
+				makeSessionListItem({ sessionId: "newer", createdAt: 2000 }),
+			];
+
+			const sorted = getSortedSessions(sessions);
+
+			expect(sorted.map((s) => s.sessionId)).toEqual(["newer", "older"]);
+		});
+
+		it("handles mixed sessions with and without updatedAt", () => {
+			const sessions = [
+				makeSessionListItem({ sessionId: "old-accessed", createdAt: 1000, updatedAt: 3000 }),
+				makeSessionListItem({ sessionId: "never-accessed", createdAt: 2000 }),
+				makeSessionListItem({ sessionId: "recently-accessed", createdAt: 500, updatedAt: 4000 }),
+			];
+
+			const sorted = getSortedSessions(sessions);
+
+			expect(sorted.map((s) => s.sessionId)).toEqual([
+				"recently-accessed",
+				"old-accessed",
+				"never-accessed",
+			]);
+		});
+
+		it("does not mutate the original array", () => {
+			const sessions = [
+				makeSessionListItem({ sessionId: "a", createdAt: 1000 }),
+				makeSessionListItem({ sessionId: "b", createdAt: 2000 }),
+			];
+
+			const original = [...sessions];
+			getSortedSessions(sessions);
+
+			expect(sessions).toEqual(original);
 		});
 	});
 });
