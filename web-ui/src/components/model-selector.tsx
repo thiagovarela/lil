@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -77,61 +78,62 @@ export function ModelSelector() {
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          disabled={isStreaming || !sessionId}
-          className={cn(
-            'flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors',
-            'hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          )}
-        >
-          <span className="font-medium">{model.name}</span>
-          {thinkingLevel === 'extended' && (
-            <span className="text-muted-foreground">Extended</span>
-          )}
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </button>
+      <DropdownMenuTrigger
+        type="button"
+        disabled={isStreaming || !sessionId}
+        className={cn(
+          'flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors',
+          'hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        )}
+      >
+        <span className="font-medium">{model.name}</span>
+        {thinkingLevel === 'extended' && (
+          <span className="text-muted-foreground">Extended</span>
+        )}
+        <ChevronDown className="h-4 w-4 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel>Select Model</DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Select Model</DropdownMenuLabel>
+          <DropdownMenuSeparator />
 
-        <div className="max-h-96 overflow-y-auto">
-          {availableModels.map((m) => {
-            const isActive = model.provider === m.provider && model.id === m.id
-            return (
-              <DropdownMenuItem
-                key={`${m.provider}/${m.id}`}
-                onClick={() => handleModelSelect(m.provider, m.id)}
-                className="flex items-start gap-2 py-2"
-              >
-                <div className="flex h-5 w-5 items-center justify-center shrink-0">
-                  {isActive && <Check className="h-4 w-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium">{m.name}</div>
-                  <div className="text-xs text-muted-foreground line-clamp-2">
-                    {getModelDescription(m)}
+          <div className="max-h-96 overflow-y-auto">
+            {availableModels.map((m) => {
+              const isActive =
+                model.provider === m.provider && model.id === m.id
+              return (
+                <DropdownMenuItem
+                  key={`${m.provider}/${m.id}`}
+                  onClick={() => handleModelSelect(m.provider, m.id)}
+                  className="flex items-start gap-2 py-2"
+                >
+                  <div className="flex h-5 w-5 items-center justify-center shrink-0">
+                    {isActive && <Check className="h-4 w-4" />}
                   </div>
-                </div>
-              </DropdownMenuItem>
-            )
-          })}
-        </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium">{m.name}</div>
+                    <div className="text-xs text-muted-foreground line-clamp-2">
+                      {getModelDescription(m)}
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
+          </div>
 
-        <DropdownMenuSeparator />
+          <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          onClick={cycleThinkingLevel}
-          className="flex items-center justify-between"
-        >
-          <span>Thinking Level</span>
-          <span className="text-xs text-muted-foreground">
-            {thinkingLevelLabel}
-          </span>
-        </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={cycleThinkingLevel}
+            className="flex items-center justify-between"
+          >
+            <span>Thinking Level</span>
+            <span className="text-xs text-muted-foreground">
+              {thinkingLevelLabel}
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

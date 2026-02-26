@@ -182,7 +182,7 @@ function ProviderAuthSection() {
   // Load providers when component mounts
   useEffect(() => {
     loadProviders()
-  }, [])
+  }, [loadProviders])
 
   const loadProviders = async () => {
     const client = clientManager.getClient()

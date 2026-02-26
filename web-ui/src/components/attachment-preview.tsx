@@ -1,4 +1,4 @@
-import { File, Image as ImageIcon, X } from 'lucide-react'
+import { File, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 

@@ -64,7 +64,7 @@ function ExtensionsPage() {
     if (isConnected && activeSessionId) {
       loadExtensionsAndSkills()
     }
-  }, [isConnected, activeSessionId])
+  }, [isConnected, activeSessionId, loadExtensionsAndSkills])
 
   const loadExtensionsAndSkills = async () => {
     const client = clientManager.getClient()

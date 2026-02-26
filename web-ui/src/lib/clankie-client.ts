@@ -4,11 +4,11 @@
  */
 
 import { WebSocketClient } from './ws-client'
-import type { ConnectionState } from './ws-client'
 import type {
   AgentSessionEvent,
   AuthEvent,
   AuthProvider,
+  ImageContent,
   InboundWebMessage,
   Message,
   ModelInfo,
@@ -18,6 +18,7 @@ import type {
   SessionState,
   ThinkingLevel,
 } from './types'
+import type { ConnectionState } from './ws-client'
 
 export interface ClankieClientOptions {
   url: string
