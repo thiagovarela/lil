@@ -49,6 +49,7 @@ type RpcCommand =
 	| { id?: string; type: "steer"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "follow_up"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "abort" }
+	| { id?: string; type: "upload_attachment"; fileName: string; data: string; mimeType: string }
 	| { id?: string; type: "new_session"; parentSession?: string }
 	| { id?: string; type: "list_sessions" }
 	| { id?: string; type: "get_state" }
@@ -411,6 +412,37 @@ export class WebChannel implements Channel {
 			case "abort": {
 				await session.abort();
 				return { id, type: "response", command: "abort", success: true };
+			}
+
+			case "upload_attachment": {
+				const { fileName, data, mimeType } = command;
+				
+				// Save attachment to disk
+				const { mkdirSync, writeFileSync } = await import("node:fs");
+				const { join } = await import("node:path");
+				
+				// Use sessionId (which is the chatKey like web_xxx) to organize attachments
+				const dir = join(getAppDir(), "attachments", sessionId);
+				mkdirSync(dir, { recursive: true });
+				
+				// Create a unique filename with timestamp
+				const timestamp = Date.now();
+				const sanitizedName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+				const uniqueFileName = `${timestamp}_${sanitizedName}`;
+				const filePath = join(dir, uniqueFileName);
+				
+				// Write the base64 data to disk
+				writeFileSync(filePath, Buffer.from(data, "base64"));
+				
+				console.log(`[web] Saved attachment: ${filePath} (${mimeType})`);
+				
+				return {
+					id,
+					type: "response",
+					command: "upload_attachment",
+					success: true,
+					data: { path: filePath, fileName: uniqueFileName },
+				};
 			}
 
 			case "get_state": {
