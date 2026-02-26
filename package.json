@@ -1,12 +1,17 @@
 {
 	"name": "clankie",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "A minimal personal AI assistant built on pi's SDK",
 	"type": "module",
 	"bin": {
 		"clankie": "./src/cli.ts"
 	},
-	"files": ["src/", "web-ui-dist/", "package.json", "README.md"],
+	"files": [
+		"src/",
+		"web-ui-dist/",
+		"package.json",
+		"README.md"
+	],
 	"scripts": {
 		"dev": "bun run src/cli.ts",
 		"build:web-ui": "cd web-ui && bun install --frozen-lockfile && bun run build && cd .. && rm -rf web-ui-dist && cp -r web-ui/.output/public web-ui-dist",
