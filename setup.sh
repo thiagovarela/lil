@@ -23,7 +23,14 @@ else
   info "mise installed ($(mise --version | head -1))"
 fi
 
-# Activate mise shims for the current shell
+# Add mise activation to .bashrc if not already there
+if ! grep -q 'mise activate bash' ~/.bashrc 2>/dev/null; then
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+  echo 'eval "$(mise activate bash)"' >> ~/.bashrc
+  info "Added mise to ~/.bashrc"
+fi
+
+# Activate mise shims for the current script
 eval "$(mise activate bash --shims)"
 
 # ─── 2. Install bun via mise ─────────────────────────────────────────
@@ -66,8 +73,9 @@ info "clankie init complete"
 # ─── Done ─────────────────────────────────────────────────────────────
 echo ""
 info "All done! Next steps:"
-echo "  1. Run 'clankie login' to authenticate with your AI provider"
-echo "  2. Run 'clankie start' to start the daemon"
+echo "  1. Run 'source ~/.bashrc' to activate mise in your current shell"
+echo "  2. Run 'clankie login' to authenticate with your AI provider"
+echo "  3. Run 'clankie start' to start the daemon"
 echo ""
 echo "  For Slack integration, also configure:"
 echo "    clankie config set channels.slack.appToken \"xapp-...\""
