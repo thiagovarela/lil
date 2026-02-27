@@ -35,12 +35,17 @@ function _resolveAppBinary(): string {
 }
 
 function resolveProgramArguments(): string[] {
-	if (!process.argv[1]?.endsWith(".ts")) {
-		// Compiled binary
-		return [process.argv[0], "start", "--foreground"];
+	const runtime = process.execPath || process.argv[0];
+	const entry = process.argv[1];
+	const isScriptEntry = Boolean(entry && /\.(?:[cm]?js|ts)$/.test(entry));
+
+	if (isScriptEntry && entry) {
+		// Running via runtime + script entry (e.g., node dist/cli.js, bun src/cli.ts)
+		return [runtime, entry, "start", "--foreground"];
 	}
-	// Running from source with Node.js (TypeScript files)
-	return [process.argv[0], process.argv[1], "start", "--foreground"];
+
+	// Standalone executable invocation
+	return [runtime, "start", "--foreground"];
 }
 
 // ─── Systemd (Linux) ──────────────────────────────────────────────────────────
