@@ -2,8 +2,8 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect, useRef } from 'react'
 import { MessageBubble } from './message-bubble'
 import { ThinkingStepsIndicator } from './thinking-steps-indicator'
-import type {DisplayMessage} from '@/stores/messages';
-import {  messagesStore } from '@/stores/messages'
+import type { DisplayMessage } from '@/stores/messages'
+import { messagesStore } from '@/stores/messages'
 
 type MessageGroup =
   | { type: 'message'; message: DisplayMessage }
@@ -80,18 +80,20 @@ export function ChatMessages() {
   const groups = groupMessages(messages)
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      {groups.map((group) =>
-        group.type === 'message' ? (
-          <MessageBubble key={group.message.id} message={group.message} />
-        ) : (
-          <ThinkingStepsIndicator
-            key={group.messages[0].id}
-            messages={group.messages}
-          />
-        ),
-      )}
-      <div ref={bottomRef} />
+    <div className="flex-1 overflow-y-auto px-4 py-6">
+      <div className="mx-auto w-full max-w-3xl space-y-4">
+        {groups.map((group) =>
+          group.type === 'message' ? (
+            <MessageBubble key={group.message.id} message={group.message} />
+          ) : (
+            <ThinkingStepsIndicator
+              key={group.messages[0].id}
+              messages={group.messages}
+            />
+          ),
+        )}
+        <div ref={bottomRef} />
+      </div>
     </div>
   )
 }

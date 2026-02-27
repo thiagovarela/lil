@@ -18,7 +18,7 @@ describe('MessageBubble', () => {
       expect(container.querySelector('.bg-primary')).toBeInTheDocument()
       expect(
         container.querySelector('svg[class*="lucide-user"]'),
-      ).toBeInTheDocument()
+      ).not.toBeInTheDocument()
     })
 
     it('renders image attachments in user messages', () => {
@@ -81,10 +81,10 @@ describe('MessageBubble', () => {
         screen.getByRole('button', { name: /a concise answer/i }),
       ).toBeInTheDocument()
       expect(screen.getAllByText('A concise answer')).toHaveLength(2)
-      expect(container.querySelector('.bg-muted')).toBeInTheDocument()
+      expect(container.querySelector('.bg-muted')).not.toBeInTheDocument()
       expect(
         container.querySelector('svg[class*="lucide-bot"]'),
-      ).toBeInTheDocument()
+      ).not.toBeInTheDocument()
     })
 
     it('keeps metadata collapsed by default and expands on click', () => {

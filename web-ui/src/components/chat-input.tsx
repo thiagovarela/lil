@@ -279,79 +279,81 @@ export function ChatInput() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="flex flex-col gap-2">
-        {/* Attachment previews */}
-        <AttachmentPreview
-          attachments={attachments}
-          onRemove={handleRemoveAttachment}
-        />
-
-        {/* Textarea with drag-drop indicator */}
-        <div className="relative">
-          <Textarea
-            ref={textareaRef}
-            id="chat-input"
-            name="message"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder="Send a message... (Ctrl+Enter to send)"
-            className="min-h-[80px] resize-none"
-            disabled={!sessionId || isStreaming}
+      <div className="mx-auto w-full max-w-3xl">
+        <div className="flex flex-col gap-2">
+          {/* Attachment previews */}
+          <AttachmentPreview
+            attachments={attachments}
+            onRemove={handleRemoveAttachment}
           />
-          {isDragging && (
-            <div className="absolute inset-0 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80 backdrop-blur-sm">
-              <p className="text-sm font-medium text-primary">
-                Drop files here
-              </p>
-            </div>
-          )}
-        </div>
 
-        {/* Toolbar row */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileInputChange}
-              className="hidden"
-              accept="image/*,application/pdf,text/*"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
+          {/* Textarea with drag-drop indicator */}
+          <div className="relative">
+            <Textarea
+              ref={textareaRef}
+              id="chat-input"
+              name="message"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder="Send a message... (Ctrl+Enter to send)"
+              className="min-h-[80px] resize-none"
               disabled={!sessionId || isStreaming}
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach files"
-            >
-              <Paperclip className="h-4 w-4" />
-              <span className="sr-only">Attach files</span>
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              <kbd className="rounded bg-muted px-1.5 py-0.5">Ctrl+Enter</kbd>{' '}
-              to send
-            </p>
+            />
+            {isDragging && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80 backdrop-blur-sm">
+                <p className="text-sm font-medium text-primary">
+                  Drop files here
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <ToolActivitySheet disabled={!sessionId} />
-            <ModelSelector />
-            <Button
-              onClick={handleSend}
-              disabled={
-                (!message.trim() && attachments.length === 0) ||
-                !sessionId ||
-                isStreaming
-              }
-              size="icon"
-            >
-              <Send className="h-4 w-4" />
-              <span className="sr-only">Send message</span>
-            </Button>
+          {/* Toolbar row */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileInputChange}
+                className="hidden"
+                accept="image/*,application/pdf,text/*"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={!sessionId || isStreaming}
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach files"
+              >
+                <Paperclip className="h-4 w-4" />
+                <span className="sr-only">Attach files</span>
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                <kbd className="rounded bg-muted px-1.5 py-0.5">Ctrl+Enter</kbd>{' '}
+                to send
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <ToolActivitySheet disabled={!sessionId} />
+              <ModelSelector />
+              <Button
+                onClick={handleSend}
+                disabled={
+                  (!message.trim() && attachments.length === 0) ||
+                  !sessionId ||
+                  isStreaming
+                }
+                size="icon"
+              >
+                <Send className="h-4 w-4" />
+                <span className="sr-only">Send message</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
