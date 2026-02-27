@@ -1,21 +1,17 @@
-import { BashRenderer } from './bash-renderer'
-import { EditRenderer } from './edit-renderer'
-import { FindRenderer } from './find-renderer'
-import { FallbackRenderer } from './fallback-renderer'
-import { GrepRenderer } from './grep-renderer'
-import { LsRenderer } from './ls-renderer'
-import { ReadRenderer } from './read-renderer'
-import { WriteRenderer } from './write-renderer'
-import type { ToolRendererRegistry } from './types'
+// Export summary helpers for tool command display
+export { getToolCommandSummary, getToolOutputText } from './summary'
+export type { ToolSummary } from './summary'
 
-export const builtInRenderers: ToolRendererRegistry = {
-  bash: BashRenderer,
-  read: ReadRenderer,
-  write: WriteRenderer,
-  edit: EditRenderer,
-  grep: GrepRenderer,
-  find: FindRenderer,
-  ls: LsRenderer,
-}
+// Keep fallback renderer and extension rendering for special cases
+export { FallbackRenderer } from './fallback-renderer'
+export { RenderHintRenderer } from './render-hint-renderer'
+export { JsonRenderRenderer } from './json-render-renderer'
 
-export { FallbackRenderer }
+// Re-export types
+export type {
+  ToolRenderer,
+  ToolRendererProps,
+  ToolRendererRegistry,
+  ExtensionRenderHint,
+  ExtensionUISpec,
+} from './types'
