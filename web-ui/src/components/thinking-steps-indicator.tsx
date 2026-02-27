@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Loader2 } from 'lucide-react'
+import { ChevronDown, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import type { DisplayMessage } from '@/stores/messages'
 import { cn } from '@/lib/utils'
@@ -33,16 +33,12 @@ export function ThinkingStepsIndicator({
   const stepCount = messages.length
 
   return (
-    <div className="flex gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Bot className="h-4 w-4" />
-      </div>
-
+    <div className="relative w-full">
       <button
         type="button"
         onClick={() => setIsExpanded((v) => !v)}
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-left transition-colors',
+          'flex w-full min-w-0 items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-left transition-colors',
           'border-border/60 bg-muted/30 hover:bg-muted/50',
           isExpanded && 'bg-muted/50',
         )}
@@ -77,7 +73,7 @@ export function ThinkingStepsIndicator({
       </button>
 
       {isExpanded && (
-        <div className="absolute left-11 right-0 mt-10 rounded-lg border border-border/60 bg-card/95 p-3 shadow-sm backdrop-blur-sm">
+        <div className="mt-2 rounded-lg border border-border/60 bg-card/95 p-3 shadow-sm backdrop-blur-sm">
           <ol className="space-y-2 text-xs">
             {messages.map((msg, index) => {
               const thinkingText = getThinkingText(msg)
