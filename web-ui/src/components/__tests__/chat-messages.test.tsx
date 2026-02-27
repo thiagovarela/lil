@@ -4,8 +4,11 @@ import { ChatMessages } from '../chat-messages'
 import {
   addUserMessage,
   appendStreamToken,
+  appendThinkingToken,
   endAssistantMessage,
+  endThinking,
   startAssistantMessage,
+  startThinking,
 } from '@/stores/messages'
 
 describe('ChatMessages', () => {
@@ -127,6 +130,127 @@ describe('ChatMessages', () => {
       // Check for message spacing
       const messagesContainer = container.querySelector('.space-y-4')
       expect(messagesContainer).toBeInTheDocument()
+    })
+  })
+
+  describe('thinking-only message grouping', () => {
+    it('groups consecutive thinking-only assistant messages', () => {
+      // Create 3 thinking-only messages
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('First thinking step')
+      endThinking()
+      endAssistantMessage()
+
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('Second thinking step')
+      endThinking()
+      endAssistantMessage()
+
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('Third thinking step')
+      endThinking()
+      endAssistantMessage()
+
+      render(<ChatMessages />)
+
+      // Should show a single compact indicator with "3 steps"
+      expect(screen.getByText('3 steps')).toBeInTheDocument()
+      expect(screen.getByText('💭 Thinking')).toBeInTheDocument()
+    })
+
+    it('renders thinking-only messages separately from text messages', () => {
+      // Thinking-only message
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('Thinking')
+      endThinking()
+      endAssistantMessage()
+
+      // Regular assistant message with text
+      startAssistantMessage()
+      appendStreamToken('Here is my response')
+      endAssistantMessage()
+
+      render(<ChatMessages />)
+
+      // Should have both: compact thinking indicator + regular message bubble
+      expect(screen.getByText('1 step')).toBeInTheDocument()
+      expect(screen.getByText('Here is my response')).toBeInTheDocument()
+    })
+
+    it('does not group thinking-only messages across user messages', () => {
+      // First thinking-only message
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('First thought')
+      endThinking()
+      endAssistantMessage()
+
+      // User message in between
+      addUserMessage('What do you think?')
+
+      // Second thinking-only message
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('Second thought')
+      endThinking()
+      endAssistantMessage()
+
+      render(<ChatMessages />)
+
+      // Should show two separate "1 step" indicators (not grouped)
+      const stepIndicators = screen.getAllByText('1 step')
+      expect(stepIndicators).toHaveLength(2)
+    })
+
+    it('renders regular assistant messages with thinking as normal bubbles', () => {
+      // Assistant message with both thinking and text content
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('Let me think')
+      endThinking()
+      appendStreamToken('Here is my answer')
+      endAssistantMessage()
+
+      const { container } = render(<ChatMessages />)
+
+      // Should render as a normal message bubble with prose content
+      const proseContent = container.querySelector('.prose')
+      expect(proseContent).toBeInTheDocument()
+      expect(proseContent?.textContent).toContain('Here is my answer')
+
+      // The compact "💭 Thinking" indicator should NOT appear
+      expect(screen.queryByText('💭 Thinking')).not.toBeInTheDocument()
+    })
+
+    it('handles a single thinking-only message', () => {
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('Single thought')
+      endThinking()
+      endAssistantMessage()
+
+      render(<ChatMessages />)
+
+      expect(screen.getByText('1 step')).toBeInTheDocument()
+      expect(screen.getByText(/Single thought/)).toBeInTheDocument()
+    })
+
+    it('shows live indicator for streaming thinking-only message', () => {
+      startAssistantMessage()
+      startThinking()
+      appendThinkingToken('Currently thinking')
+      // Don't call endThinking - leave it streaming
+
+      const { container } = render(<ChatMessages />)
+
+      expect(screen.getByText('1 step')).toBeInTheDocument()
+      // Should show spinner for live thinking
+      const spinner = container.querySelector('.animate-spin')
+      expect(spinner).toBeInTheDocument()
     })
   })
 })

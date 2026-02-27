@@ -1,7 +1,56 @@
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useRef } from 'react'
 import { MessageBubble } from './message-bubble'
-import { messagesStore } from '@/stores/messages'
+import { ThinkingStepsIndicator } from './thinking-steps-indicator'
+import type {DisplayMessage} from '@/stores/messages';
+import {  messagesStore } from '@/stores/messages'
+
+type MessageGroup =
+  | { type: 'message'; message: DisplayMessage }
+  | { type: 'thinking-steps'; messages: Array<DisplayMessage> }
+
+/**
+ * Check if a message is thinking-only (no text content, but has thinking content)
+ */
+function isThinkingOnlyMessage(message: DisplayMessage): boolean {
+  if (message.role !== 'assistant') return false
+  const hasText = message.content.trim().length > 0
+  const hasThinking =
+    (message.thinkingContent ?? message.persistedThinkingContent ?? '').trim()
+      .length > 0
+  return !hasText && hasThinking
+}
+
+/**
+ * Group consecutive thinking-only assistant messages together.
+ * All other messages remain as individual groups.
+ */
+function groupMessages(messages: Array<DisplayMessage>): Array<MessageGroup> {
+  const groups: Array<MessageGroup> = []
+  let thinkingBuffer: Array<DisplayMessage> = []
+
+  for (const message of messages) {
+    if (isThinkingOnlyMessage(message)) {
+      // Add to the thinking buffer
+      thinkingBuffer.push(message)
+    } else {
+      // Flush any buffered thinking-only messages as a group
+      if (thinkingBuffer.length > 0) {
+        groups.push({ type: 'thinking-steps', messages: thinkingBuffer })
+        thinkingBuffer = []
+      }
+      // Add the current message as its own group
+      groups.push({ type: 'message', message })
+    }
+  }
+
+  // Flush any remaining thinking-only messages
+  if (thinkingBuffer.length > 0) {
+    groups.push({ type: 'thinking-steps', messages: thinkingBuffer })
+  }
+
+  return groups
+}
 
 export function ChatMessages() {
   const { messages } = useStore(messagesStore, (state) => ({
@@ -28,11 +77,20 @@ export function ChatMessages() {
     )
   }
 
+  const groups = groupMessages(messages)
+
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
-      ))}
+      {groups.map((group) =>
+        group.type === 'message' ? (
+          <MessageBubble key={group.message.id} message={group.message} />
+        ) : (
+          <ThinkingStepsIndicator
+            key={group.messages[0].id}
+            messages={group.messages}
+          />
+        ),
+      )}
       <div ref={bottomRef} />
     </div>
   )

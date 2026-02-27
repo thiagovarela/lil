@@ -73,11 +73,17 @@ export function AssistantMessageContent({
         </div>
       )}
 
-      <div className="prose prose-sm dark:prose-invert max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {message.content || '...'}
-        </ReactMarkdown>
-      </div>
+      {message.content.trim().length > 0 ? (
+        <div className="prose prose-sm dark:prose-invert max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {message.content}
+          </ReactMarkdown>
+        </div>
+      ) : message.isStreaming ? (
+        <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
+          ...
+        </div>
+      ) : null}
     </>
   )
 }
