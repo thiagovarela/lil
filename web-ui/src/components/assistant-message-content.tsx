@@ -2,6 +2,7 @@ import { ChevronDown, Clock3, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { ToolExecutionList } from './tool-execution-list'
 import type { DisplayMessage } from '@/stores/messages'
 import { cn } from '@/lib/utils'
 
@@ -72,6 +73,9 @@ export function AssistantMessageContent({
           )}
         </div>
       )}
+
+      {/* Tool executions inline before content */}
+      <ToolExecutionList messageId={message.id} />
 
       {message.content.trim().length > 0 ? (
         <div className="prose prose-sm dark:prose-invert max-w-none">

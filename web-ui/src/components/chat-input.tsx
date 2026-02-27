@@ -7,7 +7,6 @@ import type { ImageContent } from '@/lib/types'
 import type { DisplayAttachment } from '@/stores/messages'
 import { AttachmentPreview } from '@/components/attachment-preview'
 import { ModelSelector } from '@/components/model-selector'
-import { ToolActivitySheet } from '@/components/tool-activity-sheet'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { clientManager } from '@/lib/client-manager'
@@ -339,7 +338,6 @@ export function ChatInput() {
             </div>
 
             <div className="flex items-center gap-2">
-              <ToolActivitySheet disabled={!sessionId} />
               <ModelSelector />
               <Button
                 onClick={handleSend}
