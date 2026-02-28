@@ -4,6 +4,7 @@
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/dm-sans';
 @import '@fontsource/jetbrains-mono';
+@import 'highlight.js/styles/github-dark-dimmed.css';
 
 @custom-variant dark (&:is(.dark *));
 
